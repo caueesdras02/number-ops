@@ -1,0 +1,82 @@
+import { NUMBER_STATUSES } from "../config/constants.js";
+import { createSeedState } from "../data/seed-data.js";
+import { createNumber } from "../models/number.js";
+import { normalizePhone, now } from "../models/helpers.js";
+
+export class NumbersService {
+  constructor(repository) {
+    this.repository = repository;
+    this.state = repository.initialize();
+    this.initializeSeed();
+  }
+
+  initializeSeed() {
+    const isEmpty = this.state.numbers.length === 0 && this.state.locations.length === 0 && this.state.responsibles.length === 0;
+    if (!this.state.meta?.seedApplied && isEmpty) {
+      this.state = createSeedState();
+      this.persist();
+    }
+  }
+
+  getNumbers(query = "") {
+    const normalizedQuery = normalizePhone(query);
+    if (!normalizedQuery) return [...this.state.numbers];
+    return this.state.numbers.filter((number) => number.phone.includes(normalizedQuery));
+  }
+
+  getNumber(id) { return this.state.numbers.find((number) => number.id === id) ?? null; }
+  getLocations() { return [...this.state.locations].filter((location) => location.isActive); }
+  getResponsibles() { return [...this.state.responsibles].filter((responsible) => responsible.isActive); }
+
+  create(input) {
+    const phone = this.validatePhone(input.phone);
+    this.assertPhoneIsUnique(phone);
+    const number = createNumber({ ...input, phone });
+    this.state.numbers = [...this.state.numbers, number];
+    this.persist();
+    return number;
+  }
+
+  update(id, input) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    const phone = this.validatePhone(input.phone);
+    this.assertPhoneIsUnique(phone, id);
+    const updated = {
+      ...existing,
+      phone,
+      identification: input.identification.trim(),
+      status: input.status ?? existing.status,
+      locationId: input.locationId || null,
+      responsibleId: input.responsibleId || null,
+      notes: input.notes.trim(),
+      updatedAt: now(),
+    };
+    this.state.numbers = this.state.numbers.map((number) => number.id === id ? updated : number);
+    this.persist();
+    return updated;
+  }
+
+  archive(id) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    const archived = { ...existing, status: NUMBER_STATUSES.INACTIVE, archivedAt: now(), updatedAt: now() };
+    this.state.numbers = this.state.numbers.map((number) => number.id === id ? archived : number);
+    this.persist();
+    return archived;
+  }
+
+  persist() { this.repository.save(this.state); }
+
+  validatePhone(phone) {
+    const normalized = normalizePhone(phone);
+    if (!normalized) throw new Error("Informe o número de telefone.");
+    if (normalized.length < 10 || normalized.length > 15) throw new Error("Informe um telefone válido com DDI e DDD.");
+    return normalized;
+  }
+
+  assertPhoneIsUnique(phone, excludedId = null) {
+    const duplicate = this.state.numbers.some((number) => number.phone === phone && number.id !== excludedId);
+    if (duplicate) throw new Error("Este telefone já está cadastrado.");
+  }
+}
