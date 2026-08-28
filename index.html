@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Number Ops — controle operacional de números." />
+    <title>Number Ops</title>
+    <link rel="stylesheet" href="./src/css/main.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="sidebar" aria-label="Navegação principal">
+        <a class="brand" href="#dashboard" aria-label="Number Ops, página inicial">
+          <span class="brand-mark" aria-hidden="true">N</span><span>Number Ops</span>
+        </a>
+        <nav class="navigation" aria-label="Seções do sistema">
+          <a class="navigation-link is-active" href="#dashboard" data-view="dashboard">Visão geral</a>
+          <a class="navigation-link" href="#numbers" data-view="numbers">Números</a>
+          <a class="navigation-link" href="#incidents" data-view="incidents">Ocorrências</a>
+          <a class="navigation-link" href="#guide" data-view="guide">Boas práticas</a>
+        </nav>
+        <p class="sidebar-note">V1 · dados locais no navegador</p>
+      </aside>
+      <main class="main-content">
+        <header class="topbar">
+          <div><p class="eyebrow">Operação</p><h1 id="page-title">Visão geral</h1></div>
+          <span class="environment-label">Fundação da V1</span>
+        </header>
+        <section id="page-content" class="page-content" aria-live="polite"></section>
+      </main>
+    </div>
+    <noscript>Ative o JavaScript para utilizar o Number Ops.</noscript>
+    <script type="module" src="./src/js/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+.app-shell { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100vh; }
+.sidebar { display: flex; flex-direction: column; gap: 42px; padding: 28px 18px; color: #fff; background: var(--color-sidebar); }
+.main-content { min-width: 0; padding: 32px clamp(24px, 5vw, 72px); }
+.topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 30px; }
+.page-content { max-width: 1080px; }
+@media (max-width: 720px) { .app-shell { display: block; } .sidebar { gap: 18px; padding: 18px 20px; } .navigation { display: flex; overflow-x: auto; } .navigation-link { flex: 0 0 auto; } .sidebar-note, .environment-label { display: none; } .main-content { padding: 28px 20px; } .topbar { align-items: center; } }
