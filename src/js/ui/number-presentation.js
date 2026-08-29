@@ -21,3 +21,12 @@ export function formatPhone(phone) {
 export function nameFor(items, id, fallback = "Não definido") {
   return items.find((item) => item.id === id)?.name ?? fallback;
 }
+
+// Mantém eventos anteriores consistentes com a nomenclatura exibida hoje.
+export function displayTerminology(value = "") {
+  return String(value)
+    .replaceAll("Grupos", "Squads")
+    .replaceAll("grupos", "squads")
+    .replaceAll("Grupo", "Squad")
+    .replaceAll("grupo", "squad");
+}
