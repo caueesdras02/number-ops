@@ -39,16 +39,17 @@ const guideController = new GuideController({ content });
 const backupController = new BackupController({ service: new BackupService(numbersService), content });
 
 function showView(viewName) {
-  if (viewName === "dashboard") dashboardController.render();
-  else if (viewName === "numbers") numbersController.render();
-  else if (directoryControllers[viewName]) directoryControllers[viewName].render();
-  else if (viewName === "incidents") incidentsController.render();
-  else if (viewName === "history") historyController.render();
-  else if (viewName === "guide") guideController.render();
-  else if (viewName === "backup") backupController.render();
-  else content.innerHTML = renderView(viewName);
-  title.textContent = getViewTitle(viewName);
-  navigationLinks.forEach((link) => link.classList.toggle("is-active", link.dataset.view === viewName));
+  const [view, resourceId] = viewName.split("/");
+  if (view === "dashboard") dashboardController.render();
+  else if (view === "numbers") resourceId ? numbersController.showDetail(resourceId) : numbersController.render();
+  else if (directoryControllers[view]) directoryControllers[view].render();
+  else if (view === "incidents") incidentsController.render();
+  else if (view === "history") historyController.render();
+  else if (view === "guide") guideController.render();
+  else if (view === "backup") backupController.render();
+  else content.innerHTML = renderView(view);
+  title.textContent = getViewTitle(view);
+  navigationLinks.forEach((link) => link.classList.toggle("is-active", link.dataset.view === view));
   setMobileNavigation(false);
 }
 

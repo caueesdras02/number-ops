@@ -41,7 +41,10 @@ export class NumbersController {
     const number = this.service.getNumber(id);
     if (!number) return this.render();
     this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id) });
-    this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => this.render());
+    this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => {
+      if (window.location.hash !== "#numbers") window.location.hash = "#numbers";
+      else this.render();
+    });
     this.content.querySelector('[data-action="edit"]')?.addEventListener('click', () => this.openForm(number.id));
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
     this.content.querySelector('[data-action="restore"]')?.addEventListener('click', () => { this.service.restore(number.id); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); });
