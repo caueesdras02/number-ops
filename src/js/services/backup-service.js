@@ -20,7 +20,7 @@ export class BackupService {
     let backup;
     try { backup = JSON.parse(serialized); } catch { throw new Error('O arquivo não contém um JSON válido.'); }
     const state = this.validate(backup);
-    return { state: clone(state), exportedAt: backup.exportedAt, summary: Object.fromEntries(COLLECTIONS.map((name) => [name, state[name].length])) };
+    return { state: clone(state), exportedAt: backup.exportedAt, formatVersion: backup.formatVersion, summary: Object.fromEntries(COLLECTIONS.map((name) => [name, state[name].length])) };
   }
   restore(prepared) {
     const state = this.validate({ kind: 'number-ops-backup', formatVersion: BACKUP_FORMAT_VERSION, state: prepared.state });
