@@ -18,15 +18,20 @@ export class NumbersService {
     }
   }
 
-  getNumbers(query = "") {
+  getNumbers(query = "", archiveFilter = "ALL") {
     const normalizedQuery = normalizePhone(query);
-    if (!normalizedQuery) return [...this.state.numbers];
-    return this.state.numbers.filter((number) => number.phone.includes(normalizedQuery));
+    return this.state.numbers.filter((number) => {
+      const matchesQuery = !normalizedQuery || number.phone.includes(normalizedQuery);
+      const matchesArchiveFilter = archiveFilter === "ARCHIVED" ? Boolean(number.archivedAt) : archiveFilter === "ACTIVE" ? !number.archivedAt : true;
+      return matchesQuery && matchesArchiveFilter;
+    });
   }
 
   getNumber(id) { return this.state.numbers.find((number) => number.id === id) ?? null; }
   getLocations() { return [...this.state.locations].filter((location) => location.isActive); }
   getResponsibles() { return [...this.state.responsibles].filter((responsible) => responsible.isActive); }
+  getClients() { return [...this.state.clients].filter((client) => client.isActive); }
+  getGroups() { return [...this.state.groups].filter((group) => group.isActive); }
 
   create(input) {
     const phone = this.validatePhone(input.phone);

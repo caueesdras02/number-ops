@@ -1,26 +1,11 @@
 import { NUMBER_STATUSES } from "../config/constants.js";
 import { isAvailableForOperation } from "../models/number.js";
+import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
 
-const statusLabels = Object.freeze({ ACTIVE: "Ativo", WARMING: "Em aquecimento", UNDER_REVIEW: "Em análise", BLOCKED: "Bloqueado", INACTIVE: "Inativo" });
-
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#039;", '"': "&quot;" })[character]);
-}
-
-export function formatPhone(phone) {
-  const country = phone.slice(0, 2);
-  const area = phone.slice(2, 4);
-  const first = phone.slice(4, 9);
-  const last = phone.slice(9);
-  return `+${country} (${area}) ${first}-${last}`;
-}
-
-function nameFor(items, id) { return items.find((item) => item.id === id)?.name ?? "Não definido"; }
-
-export function renderNumbersView(numbers, locations, responsibles, query = "") {
+export function renderNumbersView(numbers, locations, responsibles, query = "", archiveFilter = "ALL") {
   const rows = numbers.map((number) => `
     <tr>
-      <td><strong>${formatPhone(number.phone)}</strong><span class="table-secondary">${escapeHtml(number.identification || "Sem identificação")}</span></td>
+      <td><button class="number-link" type="button" data-action="view" data-id="${number.id}">${formatPhone(number.phone)}</button><span class="table-secondary">${escapeHtml(number.identification || "Sem identificação")}</span></td>
       <td><span class="status-badge status-${number.status.toLowerCase()}">${statusLabels[number.status]}</span>${number.archivedAt ? '<span class="archive-label">Arquivado</span>' : ""}</td>
       <td>${escapeHtml(nameFor(locations, number.locationId))}</td>
       <td>${escapeHtml(nameFor(responsibles, number.responsibleId))}</td>
@@ -31,7 +16,7 @@ export function renderNumbersView(numbers, locations, responsibles, query = "") 
   return `
     <section class="numbers-page">
       <div class="page-heading"><div><h2>Números</h2><p>Controle os números da operação e sua disponibilidade atual.</p></div><button class="button button-primary" type="button" data-action="add">Adicionar número</button></div>
-      <div class="search-panel"><label class="search-label" for="number-search">Buscar por número</label><input id="number-search" class="input" type="search" inputmode="tel" value="${escapeHtml(query)}" placeholder="Ex.: +55 (11) 99999-0000" autocomplete="off" /></div>
+      <div class="list-controls"><div class="search-panel"><label class="search-label" for="number-search">Buscar por número</label><input id="number-search" class="input" type="search" inputmode="tel" value="${escapeHtml(query)}" placeholder="Ex.: +55 (11) 99999-0000" autocomplete="off" /></div><label class="filter-label" for="archive-filter">Exibir<select id="archive-filter" class="input"><option value="ALL" ${archiveFilter === "ALL" ? "selected" : ""}>Todos</option><option value="ACTIVE" ${archiveFilter === "ACTIVE" ? "selected" : ""}>Ativos</option><option value="ARCHIVED" ${archiveFilter === "ARCHIVED" ? "selected" : ""}>Arquivados</option></select></label></div>
       <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Número</th><th>Status</th><th>Localização</th><th>Responsável</th><th>Disponibilidade</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${rows || `<tr><td class="empty-cell" colspan="6">${emptyMessage}</td></tr>`}</tbody></table></div></div>
     </section>`;
 }
