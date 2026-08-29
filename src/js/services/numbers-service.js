@@ -2,11 +2,13 @@ import { NUMBER_STATUSES } from "../config/constants.js";
 import { createSeedState } from "../data/seed-data.js";
 import { createNumber } from "../models/number.js";
 import { normalizePhone, now } from "../models/helpers.js";
+import { HistoryService } from "./history-service.js";
 
 export class NumbersService {
   constructor(repository) {
     this.repository = repository;
     this.state = repository.initialize();
+    this.history = new HistoryService(this);
     this.initializeSeed();
   }
 
@@ -42,6 +44,7 @@ export class NumbersService {
     const number = createNumber({ ...input, phone });
     this.state.numbers = [...this.state.numbers, number];
     this.persist();
+    this.record(number.id, "NUMBER_CREATED", "Número cadastrado.", { newValue: number });
     return number;
   }
 
@@ -64,6 +67,7 @@ export class NumbersService {
     };
     this.state.numbers = this.state.numbers.map((number) => number.id === id ? updated : number);
     this.persist();
+    this.recordChanges(existing, updated);
     return updated;
   }
 
@@ -73,6 +77,7 @@ export class NumbersService {
     const archived = { ...existing, status: NUMBER_STATUSES.INACTIVE, archivedAt: now(), updatedAt: now() };
     this.state.numbers = this.state.numbers.map((number) => number.id === id ? archived : number);
     this.persist();
+    this.record(id, "NUMBER_ARCHIVED", "Número arquivado.", { previousValue: { status: existing.status, archivedAt: existing.archivedAt }, newValue: { status: archived.status, archivedAt: archived.archivedAt } });
     return archived;
   }
 
@@ -82,10 +87,19 @@ export class NumbersService {
     const restored = { ...existing, status, archivedAt: null, updatedAt: now() };
     this.state.numbers = this.state.numbers.map((number) => number.id === id ? restored : number);
     this.persist();
+    this.record(id, "NUMBER_RESTORED", "Número desarquivado.", { previousValue: { status: existing.status, archivedAt: existing.archivedAt }, newValue: { status: restored.status, archivedAt: restored.archivedAt } });
     return restored;
   }
 
   persist() { this.repository.save(this.state); }
+
+  record(numberId, type, description, metadata) { this.history.add({ numberId, type, description, metadata }); }
+
+  recordChanges(previous, next) {
+    const fields = [["status", "NUMBER_STATUS_CHANGED", "Status alterado."], ["locationId", "NUMBER_LOCATION_CHANGED", "Localização alterada."], ["responsibleId", "NUMBER_RESPONSIBLE_CHANGED", "Responsável alterado."]];
+    fields.forEach(([field, type, description]) => { if (previous[field] !== next[field]) this.record(next.id, type, description, { previousValue: previous[field], newValue: next[field] }); });
+    [["clientIds", "CLIENT", "Cliente"], ["groupIds", "GROUP", "Grupo"]].forEach(([field, key, label]) => { const oldIds = previous[field] ?? [], newIds = next[field] ?? []; newIds.filter((id) => !oldIds.includes(id)).forEach((id) => this.record(next.id, `${key}_ASSOCIATED`, `${label} associado.`, { newValue: id })); oldIds.filter((id) => !newIds.includes(id)).forEach((id) => this.record(next.id, `${key}_REMOVED`, `${label} removido.`, { previousValue: id })); });
+  }
 
   validatePhone(phone) {
     const normalized = normalizePhone(phone);

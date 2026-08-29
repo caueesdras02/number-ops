@@ -13,6 +13,7 @@ export class DirectoryController {
 
   openForm(id = null) {
     this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}));
+    this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.content.querySelector(".modal-backdrop")?.remove()));
     this.content.querySelector("#directory-form")?.addEventListener("submit", (event) => {
       event.preventDefault();
       const form = event.currentTarget;

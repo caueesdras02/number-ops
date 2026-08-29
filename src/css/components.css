@@ -1,5 +1,6 @@
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: -0.02em; }
 .brand-mark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; color: var(--color-on-primary); background: var(--color-primary); }
+.brand-logo { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; object-position: center; }
 .navigation { display: grid; gap: 6px; }
 .navigation-link { padding: 10px 12px; border-radius: 8px; color: var(--color-sidebar-muted); font-size: .94rem; font-weight: 600; }
 .navigation-link:hover { color: var(--color-white); background: rgb(255 255 255 / .11); }

@@ -36,7 +36,7 @@ export class NumbersController {
   showDetail(id) {
     const number = this.service.getNumber(id);
     if (!number) return this.render();
-    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups() });
+    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id) });
     this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => this.render());
   }
 

@@ -1,5 +1,6 @@
 import { isAvailableForOperation } from "../models/number.js";
 import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
+import { timeline } from "./history-view.js";
 
 function renderAssociationList(ids, items, emptyMessage) {
   const associations = ids.map((id) => nameFor(items, id, null)).filter(Boolean);
@@ -7,7 +8,7 @@ function renderAssociationList(ids, items, emptyMessage) {
   return `<ul class="association-list">${associations.map((name) => `<li>${escapeHtml(name)}</li>`).join("")}</ul>`;
 }
 
-export function renderNumberDetailView({ number, locations, responsibles, clients, groups }) {
+export function renderNumberDetailView({ number, locations, responsibles, clients, groups, historyEvents = [], incidents = [] }) {
   const available = isAvailableForOperation(number);
   return `
     <section class="number-detail-page">
@@ -30,5 +31,7 @@ export function renderNumberDetailView({ number, locations, responsibles, client
         <article class="association-card"><h3>Clientes</h3>${renderAssociationList(number.clientIds ?? [], clients, "Nenhum cliente associado a este número.")}</article>
         <article class="association-card"><h3>Grupos</h3>${renderAssociationList(number.groupIds ?? [], groups, "Nenhum grupo associado a este número.")}</article>
       </div>
+      <section class="association-card"><h3>Ocorrências</h3>${incidents.map(i=>`<p>${escapeHtml(i.title)} — ${i.status}</p>`).join("") || '<p class="association-empty">Nenhuma ocorrência.</p>'}</section>
+      <section class="association-card"><h3>Histórico</h3>${timeline(historyEvents)}</section>
     </section>`;
 }
