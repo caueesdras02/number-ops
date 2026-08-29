@@ -1,0 +1,1 @@
+import { renderGuide } from '../ui/guide-view.js'; export class GuideController { constructor({content}){this.content=content} render(){this.content.innerHTML=renderGuide();this.content.querySelectorAll('[data-guide-target]').forEach((button)=>button.addEventListener('click',()=>this.content.querySelector('#'+button.dataset.guideTarget)?.scrollIntoView({behavior:'smooth'}))) } }
