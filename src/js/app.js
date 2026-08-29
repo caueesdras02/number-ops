@@ -10,10 +10,18 @@ import { HistoryController } from "./controllers/history-controller.js";
 import { DashboardService } from "./services/dashboard-service.js";
 import { DashboardController } from "./controllers/dashboard-controller.js";
 import { GuideController } from "./controllers/guide-controller.js";
+import { BackupService } from "./services/backup-service.js";
+import { BackupController } from "./controllers/backup-controller.js";
+import { ApprovedSpreadsheetMigrationService } from "./services/approved-spreadsheet-migration-service.js";
+import { TestDataCleanupService } from "./services/test-data-cleanup-service.js";
 import { getViewTitle, renderView } from "./ui/views.js";
 
 const repository = new AppRepository();
 const numbersService = new NumbersService(repository);
+const spreadsheetMigrationReport = new ApprovedSpreadsheetMigrationService(numbersService).run();
+if (spreadsheetMigrationReport.created || spreadsheetMigrationReport.alreadyCompleted) console.info('Migração inicial aprovada:', spreadsheetMigrationReport);
+const testDataCleanupReport = new TestDataCleanupService(numbersService).run();
+if (testDataCleanupReport.removedNumbers?.length || testDataCleanupReport.alreadyCompleted) console.info('Limpeza de dados de teste:', testDataCleanupReport);
 
 const content = document.querySelector("#page-content");
 const title = document.querySelector("#page-title");
@@ -25,6 +33,7 @@ const incidentsController = new IncidentsController({ service: new IncidentsServ
 const historyController = new HistoryController({ service: new HistoryService(numbersService), numbers: numbersService, content });
 const dashboardController = new DashboardController({ service: new DashboardService(numbersService), content });
 const guideController = new GuideController({ content });
+const backupController = new BackupController({ service: new BackupService(numbersService), content });
 
 function showView(viewName) {
   if (viewName === "dashboard") dashboardController.render();
@@ -33,6 +42,7 @@ function showView(viewName) {
   else if (viewName === "incidents") incidentsController.render();
   else if (viewName === "history") historyController.render();
   else if (viewName === "guide") guideController.render();
+  else if (viewName === "backup") backupController.render();
   else content.innerHTML = renderView(viewName);
   title.textContent = getViewTitle(viewName);
   navigationLinks.forEach((link) => link.classList.toggle("is-active", link.dataset.view === viewName));

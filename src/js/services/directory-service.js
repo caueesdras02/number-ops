@@ -1,7 +1,7 @@
-import { createClient, createGroup, createResponsible } from "../models/entities.js";
+import { createClient, createGroup, createResponsible, createLocation } from "../models/entities.js";
 import { now } from "../models/helpers.js";
 
-const creators = { clients: createClient, groups: createGroup, responsibles: createResponsible };
+const creators = { clients: createClient, groups: createGroup, responsibles: createResponsible, locations: createLocation };
 
 export class DirectoryService {
   constructor(numbersService) { this.numbersService = numbersService; }

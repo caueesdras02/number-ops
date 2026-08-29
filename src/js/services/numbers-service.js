@@ -38,13 +38,13 @@ export class NumbersService {
   getClients() { return [...this.state.clients].filter((client) => client.isActive); }
   getGroups() { return [...this.state.groups].filter((group) => group.isActive); }
 
-  create(input) {
+  create(input, { historyDescription = "Número cadastrado.", historyMetadata = {} } = {}) {
     const phone = this.validatePhone(input.phone);
     this.assertPhoneIsUnique(phone);
     const number = createNumber({ ...input, phone });
     this.state.numbers = [...this.state.numbers, number];
     this.persist();
-    this.record(number.id, "NUMBER_CREATED", "Número cadastrado.", { newValue: number });
+    this.record(number.id, "NUMBER_CREATED", historyDescription, { newValue: number, ...historyMetadata });
     return number;
   }
 
@@ -92,6 +92,8 @@ export class NumbersService {
   }
 
   persist() { this.repository.save(this.state); }
+
+  replaceState(state) { this.state = state; this.persist(); }
 
   record(numberId, type, description, metadata) { this.history.add({ numberId, type, description, metadata }); }
 
