@@ -7,6 +7,8 @@ import { HistoryService } from "./services/history-service.js";
 import { IncidentsService } from "./services/incidents-service.js";
 import { IncidentsController } from "./controllers/incidents-controller.js";
 import { HistoryController } from "./controllers/history-controller.js";
+import { DashboardService } from "./services/dashboard-service.js";
+import { DashboardController } from "./controllers/dashboard-controller.js";
 import { getViewTitle, renderView } from "./ui/views.js";
 
 const repository = new AppRepository();
@@ -20,9 +22,11 @@ const directoryService = new DirectoryService(numbersService);
 const directoryControllers = Object.fromEntries(["clients", "groups", "responsibles"].map((type) => [type, new DirectoryController({ service: directoryService, content, type })]));
 const incidentsController = new IncidentsController({ service: new IncidentsService(numbersService, new HistoryService(numbersService)), numbers: numbersService, content });
 const historyController = new HistoryController({ service: new HistoryService(numbersService), numbers: numbersService, content });
+const dashboardController = new DashboardController({ service: new DashboardService(numbersService), content });
 
 function showView(viewName) {
-  if (viewName === "numbers") numbersController.render();
+  if (viewName === "dashboard") dashboardController.render();
+  else if (viewName === "numbers") numbersController.render();
   else if (directoryControllers[viewName]) directoryControllers[viewName].render();
   else if (viewName === "incidents") incidentsController.render();
   else if (viewName === "history") historyController.render();
