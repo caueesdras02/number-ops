@@ -1,5 +1,6 @@
 import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
 import { renderNumberDetailView } from "../ui/number-detail-view.js";
+import { showToast } from '../ui/toast.js';
 
 export class NumbersController {
   constructor({ service, content }) {
@@ -8,10 +9,11 @@ export class NumbersController {
     this.query = "";
     this.archiveFilter = "ALL";
     this.filters = {};
+    this.filtersOpen = window.matchMedia('(min-width: 701px)').matches;
   }
 
   render() {
-    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups());
+    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen);
     this.bindPageEvents();
   }
 
@@ -28,9 +30,11 @@ export class NumbersController {
     this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.showDetail(button.dataset.id)));
     this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", () => { this.service.restore(button.dataset.id); this.render(); }));
+    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", () => { this.service.restore(button.dataset.id); this.render(); showToast('Número restaurado para operação.', 'success'); }));
     this.content.querySelector("#archive-filter")?.addEventListener("change", (event) => { this.archiveFilter = event.target.value; this.render(); });
     this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
+    this.content.querySelectorAll('[data-action="toggle-filters"]').forEach((button) => button.addEventListener('click', () => { this.filtersOpen = !this.filtersOpen; this.render(); }));
+    this.content.querySelectorAll('[data-action="clear-filters"]').forEach((button) => button.addEventListener('click', () => { this.query = ''; this.archiveFilter = 'ALL'; this.filters = {}; this.render(); }));
   }
 
   showDetail(id) {
@@ -38,6 +42,10 @@ export class NumbersController {
     if (!number) return this.render();
     this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id) });
     this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => this.render());
+    this.content.querySelector('[data-action="edit"]')?.addEventListener('click', () => this.openForm(number.id));
+    this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
+    this.content.querySelector('[data-action="restore"]')?.addEventListener('click', () => { this.service.restore(number.id); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); });
+    this.content.querySelectorAll('[data-target]').forEach((button) => button.addEventListener('click', () => { window.location.hash = button.dataset.target; }));
   }
 
   openForm(id = null, message = "") {
@@ -57,13 +65,15 @@ export class NumbersController {
     const formData = new FormData(form);
     const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
     try {
-      if (form.dataset.id) this.service.update(form.dataset.id, values);
+      const editing = Boolean(form.dataset.id);
+      if (editing) this.service.update(form.dataset.id, values);
       else this.service.create(values);
       this.closeForm();
       this.render();
+      showToast(editing ? 'Número atualizado com sucesso.' : 'Número cadastrado com sucesso.', 'success');
     } catch (error) {
-      this.closeForm();
-      this.openForm(form.dataset.id || null, error.message);
+      showToast(error.message, 'error');
+      this.closeForm(); this.openForm(form.dataset.id || null, error.message);
     }
   }
 
@@ -72,5 +82,6 @@ export class NumbersController {
     if (!number || !window.confirm(`Arquivar ${number.phone}? O número ficará inativo e indisponível.`)) return;
     this.service.archive(id);
     this.render();
+    showToast('Número arquivado e retirado da operação.', 'warning');
   }
 }
