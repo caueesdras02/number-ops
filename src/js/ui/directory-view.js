@@ -1,7 +1,7 @@
 import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
 
-const labels = { clients: "Clientes", groups: "Grupos", responsibles: "Colaboradores" };
-const singular = { clients: "Cliente", groups: "Grupo", responsibles: "Colaborador" };
+const labels = { clients: "Clientes", groups: "Squads", responsibles: "Colaboradores" };
+const singular = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador" };
 const icon = { clients: "◉", groups: "◇", responsibles: "♙" };
 const status = (number) => `<span class="status-badge status-${number.status.toLowerCase()}">${statusLabels[number.status]}</span>`;
 

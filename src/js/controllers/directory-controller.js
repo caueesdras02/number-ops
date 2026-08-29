@@ -1,7 +1,7 @@
 import { renderDirectory, renderDirectoryDetail, renderDirectoryForm } from "../ui/directory-view.js";
 import { showToast } from "../ui/toast.js";
 
-const labels = { clients: "Cliente", groups: "Grupo", responsibles: "Colaborador" };
+const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador" };
 
 export class DirectoryController {
   constructor({ service, content, type }) { this.service = service; this.content = content; this.type = type; this.query = ""; }

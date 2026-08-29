@@ -38,7 +38,7 @@ export class BackupService {
       if (!Array.isArray(number.clientIds) || !Array.isArray(number.groupIds)) throw new Error('Um Número possui associações inválidas.');
       if (number.locationId && !ids.locations.has(number.locationId)) throw new Error('Um Número referencia uma localização inexistente.');
       if (number.responsibleId && !ids.responsibles.has(number.responsibleId)) throw new Error('Um Número referencia um colaborador inexistente.');
-      if (number.clientIds.some((id) => !ids.clients.has(id)) || number.groupIds.some((id) => !ids.groups.has(id))) throw new Error('Um Número possui Cliente ou Grupo inexistente.');
+      if (number.clientIds.some((id) => !ids.clients.has(id)) || number.groupIds.some((id) => !ids.groups.has(id))) throw new Error('Um Número possui Cliente ou Squad inexistente.');
     });
     state.incidents.forEach((incident) => { if (!ids.numbers.has(incident.numberId)) throw new Error('Uma Ocorrência referencia um Número inexistente.'); if (incident.responsibleId && !ids.responsibles.has(incident.responsibleId)) throw new Error('Uma Ocorrência referencia um colaborador inexistente.'); });
     state.historyEvents.forEach((event) => { if (!ids.numbers.has(event.numberId)) throw new Error('Um evento de Histórico referencia um Número inexistente.'); });

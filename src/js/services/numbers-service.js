@@ -91,6 +91,40 @@ export class NumbersService {
     return restored;
   }
 
+  markUnderReview(id) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    if (existing.status === NUMBER_STATUSES.UNDER_REVIEW) return existing;
+    return this.update(id, { ...existing, status: NUMBER_STATUSES.UNDER_REVIEW });
+  }
+
+  registerRestriction(id, input) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    const kind = String(input.kind ?? "");
+    const descriptions = { GROUP_CREATION: "Não consegue criar squads", SEND_LIMIT: "Limitação no envio", OTHER: "Outra restrição" };
+    if (!descriptions[kind]) throw new Error("Selecione o tipo de restrição.");
+    const description = String(input.description ?? "").trim();
+    if (kind === "OTHER" && !description) throw new Error("Descreva a outra restrição.");
+    const restriction = { kind, description: kind === "OTHER" ? description : descriptions[kind], recordedAt: now() };
+    const updated = { ...existing, restriction, updatedAt: now() };
+    this.state.numbers = this.state.numbers.map((number) => number.id === id ? updated : number);
+    this.persist();
+    this.record(id, "NUMBER_RESTRICTION_RECORDED", "Restrição operacional registrada.", { previousValue: existing.restriction ?? null, newValue: restriction });
+    return updated;
+  }
+
+  removeRestriction(id) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    if (!existing.restriction) return existing;
+    const updated = { ...existing, restriction: null, updatedAt: now() };
+    this.state.numbers = this.state.numbers.map((number) => number.id === id ? updated : number);
+    this.persist();
+    this.record(id, "NUMBER_RESTRICTION_REMOVED", "Restrição operacional removida.", { previousValue: existing.restriction, newValue: null });
+    return updated;
+  }
+
   persist() { this.repository.save(this.state); }
 
   replaceState(state) { this.state = state; this.persist(); }
@@ -100,7 +134,7 @@ export class NumbersService {
   recordChanges(previous, next) {
     const fields = [["status", "NUMBER_STATUS_CHANGED", "Status alterado."], ["locationId", "NUMBER_LOCATION_CHANGED", "Localização alterada."], ["responsibleId", "NUMBER_RESPONSIBLE_CHANGED", "Responsável alterado."]];
     fields.forEach(([field, type, description]) => { if (previous[field] !== next[field]) this.record(next.id, type, description, { previousValue: previous[field], newValue: next[field] }); });
-    [["clientIds", "CLIENT", "Cliente"], ["groupIds", "GROUP", "Grupo"]].forEach(([field, key, label]) => { const oldIds = previous[field] ?? [], newIds = next[field] ?? []; newIds.filter((id) => !oldIds.includes(id)).forEach((id) => this.record(next.id, `${key}_ASSOCIATED`, `${label} associado.`, { newValue: id })); oldIds.filter((id) => !newIds.includes(id)).forEach((id) => this.record(next.id, `${key}_REMOVED`, `${label} removido.`, { previousValue: id })); });
+    [["clientIds", "CLIENT", "Cliente"], ["groupIds", "GROUP", "Squad"]].forEach(([field, key, label]) => { const oldIds = previous[field] ?? [], newIds = next[field] ?? []; newIds.filter((id) => !oldIds.includes(id)).forEach((id) => this.record(next.id, `${key}_ASSOCIATED`, `${label} associado.`, { newValue: id })); oldIds.filter((id) => !newIds.includes(id)).forEach((id) => this.record(next.id, `${key}_REMOVED`, `${label} removido.`, { previousValue: id })); });
   }
 
   validatePhone(phone) {
