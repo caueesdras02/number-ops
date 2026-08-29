@@ -3,6 +3,7 @@ const views = Object.freeze({
   numbers: { title: "Números", description: "A área de cadastro, listagem, edição e arquivamento será construída nas próximas fases." },
   clients: { title: "Clientes", description: "" }, groups: { title: "Grupos", description: "" }, responsibles: { title: "Colaboradores", description: "" },
   incidents: { title: "Ocorrências", description: "O modelo de ocorrências já está definido. O registro e a resolução serão implementados em uma etapa posterior." },
+  history: { title: "Histórico", description: "Consulta dos eventos operacionais registrados." },
   guide: { title: "Boas práticas", description: "Esta área reunirá orientações operacionais organizadas para consulta da equipe." },
   backup: { title: "Dados e Backup", description: "Exporte ou restaure a base local do Number Ops." },
 });

@@ -26,6 +26,9 @@ if (testDataCleanupReport.removedNumbers?.length || testDataCleanupReport.alread
 const content = document.querySelector("#page-content");
 const title = document.querySelector("#page-title");
 const navigationLinks = document.querySelectorAll("[data-view]");
+const appShell = document.querySelector(".app-shell");
+const menuToggle = document.querySelector("[data-mobile-nav-toggle]");
+const mobileNavClose = document.querySelector("[data-mobile-nav-close]");
 const numbersController = new NumbersController({ service: numbersService, content });
 const directoryService = new DirectoryService(numbersService);
 const directoryControllers = Object.fromEntries(["clients", "groups", "responsibles"].map((type) => [type, new DirectoryController({ service: directoryService, content, type })]));
@@ -46,10 +49,16 @@ function showView(viewName) {
   else content.innerHTML = renderView(viewName);
   title.textContent = getViewTitle(viewName);
   navigationLinks.forEach((link) => link.classList.toggle("is-active", link.dataset.view === viewName));
+  setMobileNavigation(false);
 }
 
 function currentView() { return window.location.hash.slice(1) || "dashboard"; }
+function setMobileNavigation(open) { appShell.classList.toggle("is-nav-open", open); menuToggle.setAttribute("aria-expanded", String(open)); menuToggle.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu"); }
 
 window.addEventListener("hashchange", () => showView(currentView()));
-window.addEventListener("keydown", (event) => { if (event.key === "Escape") content.querySelector(".modal-backdrop")?.remove(); });
+menuToggle.addEventListener("click", () => setMobileNavigation(!appShell.classList.contains("is-nav-open")));
+mobileNavClose.addEventListener("click", () => setMobileNavigation(false));
+navigationLinks.forEach((link) => link.addEventListener("click", () => setMobileNavigation(false)));
+window.addEventListener("keydown", (event) => { if (event.key === "Escape") { content.querySelector(".modal-backdrop")?.remove(); setMobileNavigation(false); } });
+window.matchMedia("(min-width: 861px)").addEventListener("change", (event) => { if (event.matches) setMobileNavigation(false); });
 showView(currentView());
