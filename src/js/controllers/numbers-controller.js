@@ -7,10 +7,11 @@ export class NumbersController {
     this.content = content;
     this.query = "";
     this.archiveFilter = "ALL";
+    this.filters = {};
   }
 
   render() {
-    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, this.archiveFilter), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter);
+    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups());
     this.bindPageEvents();
   }
 
@@ -27,7 +28,9 @@ export class NumbersController {
     this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.showDetail(button.dataset.id)));
     this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
+    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", () => { this.service.restore(button.dataset.id); this.render(); }));
     this.content.querySelector("#archive-filter")?.addEventListener("change", (event) => { this.archiveFilter = event.target.value; this.render(); });
+    this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
   }
 
   showDetail(id) {
@@ -39,8 +42,9 @@ export class NumbersController {
 
   openForm(id = null, message = "") {
     const number = id ? this.service.getNumber(id) : null;
-    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), message }));
+    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message }));
     const form = this.content.querySelector("#number-form");
+    form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
     form.addEventListener("submit", (event) => this.submitForm(event));
   }
@@ -50,7 +54,8 @@ export class NumbersController {
   submitForm(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const values = Object.fromEntries(new FormData(form));
+    const formData = new FormData(form);
+    const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
     try {
       if (form.dataset.id) this.service.update(form.dataset.id, values);
       else this.service.create(values);

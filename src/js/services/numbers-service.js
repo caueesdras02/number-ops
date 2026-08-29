@@ -18,14 +18,17 @@ export class NumbersService {
     }
   }
 
-  getNumbers(query = "", archiveFilter = "ALL") {
+  getNumbers(query = "", filters = {}) {
     const normalizedQuery = normalizePhone(query);
     return this.state.numbers.filter((number) => {
       const matchesQuery = !normalizedQuery || number.phone.includes(normalizedQuery);
-      const matchesArchiveFilter = archiveFilter === "ARCHIVED" ? Boolean(number.archivedAt) : archiveFilter === "ACTIVE" ? !number.archivedAt : true;
-      return matchesQuery && matchesArchiveFilter;
+      const archiveFilter = filters.archiveFilter ?? "ALL";
+      const matchesArchive = archiveFilter === "ARCHIVED" ? Boolean(number.archivedAt) : archiveFilter === "ACTIVE" ? !number.archivedAt : true;
+      return matchesQuery && matchesArchive && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
     });
   }
+
+  getNumbersFor(type, id) { const field = type === "clients" ? "clientIds" : "groupIds"; return this.state.numbers.filter((number) => number[field].includes(id)); }
 
   getNumber(id) { return this.state.numbers.find((number) => number.id === id) ?? null; }
   getLocations() { return [...this.state.locations].filter((location) => location.isActive); }
@@ -54,6 +57,8 @@ export class NumbersService {
       status: input.status ?? existing.status,
       locationId: input.locationId || null,
       responsibleId: input.responsibleId || null,
+      clientIds: input.clientIds ?? existing.clientIds ?? [],
+      groupIds: input.groupIds ?? existing.groupIds ?? [],
       notes: input.notes.trim(),
       updatedAt: now(),
     };
@@ -71,12 +76,21 @@ export class NumbersService {
     return archived;
   }
 
+  restore(id, status = NUMBER_STATUSES.ACTIVE) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    const restored = { ...existing, status, archivedAt: null, updatedAt: now() };
+    this.state.numbers = this.state.numbers.map((number) => number.id === id ? restored : number);
+    this.persist();
+    return restored;
+  }
+
   persist() { this.repository.save(this.state); }
 
   validatePhone(phone) {
     const normalized = normalizePhone(phone);
     if (!normalized) throw new Error("Informe o número de telefone.");
-    if (normalized.length < 10 || normalized.length > 15) throw new Error("Informe um telefone válido com DDI e DDD.");
+    if (!normalized.startsWith("55") || (normalized.length !== 12 && normalized.length !== 13)) throw new Error("Informe um telefone brasileiro com 55, DDD e 8 ou 9 dígitos.");
     return normalized;
   }
 
