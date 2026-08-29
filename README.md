@@ -31,7 +31,6 @@ Inicialmente:
 - Não haverá backend;
 - Não haverá banco de dados externo;
 - Não haverá integração com SendFlow;
-- Não haverá integração com UniChat;
 - Os dados serão armazenados localmente no navegador.
 
 A arquitetura será preparada para permitir a evolução futura para backend e integrações externas.
