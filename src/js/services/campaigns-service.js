@@ -1,0 +1,20 @@
+import { createCampaign, createNumberCampaignLink } from "../models/entities.js";
+import { now } from "../models/helpers.js";
+
+export const CAMPAIGN_STATUSES = Object.freeze({ ACTIVE: "ACTIVE", CLOSED: "CLOSED" });
+export const CAMPAIGN_ROLES = Object.freeze({ PRIMARY: "PRIMARY", BACKUP: "BACKUP", SUPPORT: "SUPPORT" });
+
+export class CampaignsService {
+  constructor(numbersService) { this.numbers = numbersService; this.state = numbersService.state; this.state.campaigns ??= []; this.state.numberCampaignLinks ??= []; }
+  list(filters = {}) { return this.state.campaigns.filter((item) => (!filters.query || item.name.toLocaleLowerCase("pt-BR").includes(filters.query.toLocaleLowerCase("pt-BR"))) && (!filters.status || item.status === filters.status) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
+  get(id) { return this.state.campaigns.find((item) => item.id === id) ?? null; }
+  create(input) { this.validate(input); const item = createCampaign({ ...input, status: CAMPAIGN_STATUSES.ACTIVE }); this.state.campaigns.push(item); this.persist(); return item; }
+  update(id, input) { const existing = this.get(id); if (!existing) throw new Error("Campanha não encontrada."); this.validate(input); const item = { ...existing, name: String(input.name).trim(), clientId: input.clientId || null, squadId: input.squadId || null, notes: String(input.notes ?? "").trim(), updatedAt: now() }; Object.assign(existing, item); this.persist(); return existing; }
+  close(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); item.status = CAMPAIGN_STATUSES.CLOSED; item.endedAt = now(); item.updatedAt = now(); this.state.numberCampaignLinks.filter((link) => link.campaignId === id && !link.endedAt).forEach((link) => { link.endedAt = item.endedAt; link.updatedAt = item.endedAt; this.numbers.record(link.numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: id, newValue: null }); }); this.persist(); return item; }
+  activeLinkFor(numberId) { return this.state.numberCampaignLinks.find((link) => link.numberId === numberId && !link.endedAt) ?? null; }
+  linksFor(numberId) { return this.state.numberCampaignLinks.filter((link) => link.numberId === numberId).sort((a,b) => b.startedAt.localeCompare(a.startedAt)); }
+  assign(numberId, campaignId, role) { const campaign = this.get(campaignId); if (!campaign || campaign.status !== CAMPAIGN_STATUSES.ACTIVE) throw new Error("Selecione uma campanha ativa."); if (!Object.values(CAMPAIGN_ROLES).includes(role)) throw new Error("Selecione o papel do número na campanha."); const previous = this.activeLinkFor(numberId); if (previous) { previous.endedAt = now(); previous.updatedAt = previous.endedAt; this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: previous.campaignId, newValue: null }); } const link = createNumberCampaignLink({ numberId, campaignId, role }); this.state.numberCampaignLinks.push(link); this.persist(); this.numbers.record(numberId, "CAMPAIGN_JOINED", "Número entrou em campanha.", { previousValue: previous?.campaignId ?? null, newValue: { campaignId, role } }); return link; }
+  unassign(numberId) { const link = this.activeLinkFor(numberId); if (!link) return null; link.endedAt = now(); link.updatedAt = link.endedAt; this.persist(); this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: link.campaignId, newValue: null }); return link; }
+  persist() { this.numbers.persist(); }
+  validate(input) { if (!String(input.name ?? "").trim()) throw new Error("Informe o nome da campanha."); if (!input.squadId || !input.clientId) throw new Error("Selecione Squad e Cliente."); const client = this.state.clients.find((item) => item.id === input.clientId); if (!client || (client.squadId && client.squadId !== input.squadId)) throw new Error("O Cliente deve pertencer ao Squad selecionado."); }
+}

@@ -1,10 +1,10 @@
-import { NUMBER_STATUSES } from "../config/constants.js";
+import { NUMBER_STATUSES, SCHEMA_VERSION } from "../config/constants.js";
 
 const timestamp = "2026-08-01T09:00:00.000Z";
 
 export function createSeedState() {
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     meta: { seedApplied: true },
     locations: [
       { id: "location_mobile_01", name: "Celular 01", isActive: true, createdAt: timestamp, updatedAt: timestamp },

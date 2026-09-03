@@ -4,6 +4,14 @@ const labels = { clients: "Clientes", groups: "Squads", responsibles: "Colaborad
 const singular = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador" };
 const icon = { clients: "◉", groups: "◇", responsibles: "♙" };
 const status = (number) => `<span class="status-badge status-${number.status.toLowerCase()}">${statusLabels[number.status]}</span>`;
+const date = (value) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
+const campaignCards = (campaigns, groups, links, active) => {
+  const filtered = campaigns.filter((campaign) => (campaign.status === "ACTIVE") === active);
+  return filtered.map((campaign) => {
+    const linkedNumbers = new Set(links.filter((link) => link.campaignId === campaign.id && (!active || !link.endedAt)).map((link) => link.numberId)).size;
+    return `<article class="client-campaign-card"><div><span class="status-badge ${active ? "status-active" : "status-inactive"}">${active ? "Ativa" : "Encerrada"}</span><h4>${escapeHtml(campaign.name)}</h4><p>Squad: <strong>${escapeHtml(nameFor(groups, campaign.squadId))}</strong></p><small>Início: ${date(campaign.startedAt || campaign.createdAt)}${active ? ` · ${linkedNumbers} número${linkedNumbers === 1 ? "" : "s"} vinculado${linkedNumbers === 1 ? "" : "s"}` : ` · Encerramento: ${date(campaign.endedAt)}`}</small></div><div class="client-campaign-actions"><button class="button button-quiet" data-action="open-campaign" data-id="${campaign.id}">Ver em Campanhas</button>${active ? `<button class="button button-danger" data-action="close-campaign" data-id="${campaign.id}">Finalizar campanha</button>` : ""}</div></article>`;
+  }).join("") || `<div class="directory-empty compact"><span aria-hidden="true">◇</span><div><h3>Nenhuma campanha ${active ? "atual" : "anterior"}</h3><p>${active ? "Campanhas ativas deste cliente aparecerão aqui." : "Campanhas encerradas permanecerão disponíveis aqui."}</p></div></div>`;
+};
 
 export function renderDirectory(type, items, query = "") {
   const label = labels[type];
@@ -16,10 +24,11 @@ export function renderDirectory(type, items, query = "") {
   </section>`;
 }
 
-export function renderDirectoryDetail(type, item, numbers, locations, responsibles) {
+export function renderDirectoryDetail(type, item, numbers, locations, responsibles, campaigns = [], groups = [], campaignLinks = []) {
   const label = singular[type];
   const numberRows = numbers.map((number) => `<button class="related-number" data-action="open-number" data-id="${number.id}"><div><strong>${formatPhone(number.phone)}</strong><small>${escapeHtml(number.identification || "Sem identificação")}</small></div><div class="related-number-meta">${status(number)}<small>${escapeHtml(nameFor(locations, number.locationId))} · ${escapeHtml(nameFor(responsibles, number.responsibleId))}</small></div></button>`).join("");
-  return `<section class="directory-detail"><button class="back-link" data-action="back">← Voltar para ${labels[type]}</button><header class="directory-detail-hero"><span class="directory-icon" aria-hidden="true">${icon[type]}</span><div><p class="eyebrow">${label}</p><h2>${escapeHtml(item.name)}</h2><p>${type === "responsibles" ? escapeHtml(item.team || "Sem equipe / squad") : item.isActive ? "Registro ativo" : "Registro arquivado"}</p></div><span class="directory-state ${item.isActive ? "is-active" : "is-archived"}">${item.isActive ? "Ativo" : "Arquivado"}</span></header><section class="related-numbers-section"><div class="section-heading"><div><p class="eyebrow">Relacionamentos</p><h3>Números associados</h3></div><span>${numbers.length}</span></div>${numberRows || `<div class="directory-empty compact"><span aria-hidden="true">#</span><div><h3>Sem números associados</h3><p>As associações aparecerão aqui quando existirem.</p></div></div>`}</section></section>`;
+  const clientCampaigns = type === "clients" ? `<section class="related-numbers-section client-campaigns-section"><div class="section-heading"><div><p class="eyebrow">Campanhas</p><h3>Campanhas atuais</h3></div><span>${campaigns.filter((campaign) => campaign.status === "ACTIVE").length}</span></div><div class="client-campaign-list">${campaignCards(campaigns, groups, campaignLinks, true)}</div></section><section class="related-numbers-section client-campaigns-section"><div class="section-heading"><div><p class="eyebrow">Histórico</p><h3>Campanhas anteriores</h3></div><span>${campaigns.filter((campaign) => campaign.status !== "ACTIVE").length}</span></div><div class="client-campaign-list">${campaignCards(campaigns, groups, campaignLinks, false)}</div></section>` : "";
+  return `<section class="directory-detail"><button class="back-link" data-action="back">← Voltar para ${labels[type]}</button><header class="directory-detail-hero"><span class="directory-icon" aria-hidden="true">${icon[type]}</span><div><p class="eyebrow">${label}</p><h2>${escapeHtml(item.name)}</h2><p>${type === "responsibles" ? escapeHtml(item.team || "Sem equipe / squad") : item.isActive ? "Registro ativo" : "Registro arquivado"}</p></div><span class="directory-state ${item.isActive ? "is-active" : "is-archived"}">${item.isActive ? "Ativo" : "Arquivado"}</span></header>${clientCampaigns}<section class="related-numbers-section"><div class="section-heading"><div><p class="eyebrow">Relacionamentos</p><h3>Números associados</h3></div><span>${numbers.length}</span></div>${numberRows || `<div class="directory-empty compact"><span aria-hidden="true">#</span><div><h3>Sem números associados</h3><p>As associações aparecerão aqui quando existirem.</p></div></div>`}</section></section>`;
 }
 
 export function renderDirectoryForm(type, item = {}) {

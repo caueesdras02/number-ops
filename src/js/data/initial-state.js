@@ -10,5 +10,7 @@ export function createInitialState() {
     locations: [],
     incidents: [],
     historyEvents: [],
+    campaigns: [],
+    numberCampaignLinks: [],
   };
 }

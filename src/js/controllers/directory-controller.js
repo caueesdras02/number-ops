@@ -4,7 +4,7 @@ import { showToast } from "../ui/toast.js";
 const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador" };
 
 export class DirectoryController {
-  constructor({ service, content, type }) { this.service = service; this.content = content; this.type = type; this.query = ""; }
+  constructor({ service, campaignsService = null, content, type }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.type = type; this.query = ""; }
 
   render() {
     this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query);
@@ -22,9 +22,17 @@ export class DirectoryController {
     if (!item) return this.render();
     const numbers = this.service.numbersService.getNumbersFor(this.type, id);
     const state = this.service.numbersService.state;
-    this.content.innerHTML = renderDirectoryDetail(this.type, item, numbers, state.locations, state.responsibles);
+    const campaigns = this.type === "clients" && this.campaignsService ? this.campaignsService.list({ clientId: id }) : [];
+    this.content.innerHTML = renderDirectoryDetail(this.type, item, numbers, state.locations, state.responsibles, campaigns, state.groups, state.numberCampaignLinks);
     this.content.querySelector('[data-action="back"]')?.addEventListener("click", () => this.render());
     this.content.querySelectorAll('[data-action="open-number"]').forEach((button) => button.addEventListener("click", () => { window.location.hash = `#numbers/${button.dataset.id}`; }));
+    this.content.querySelectorAll('[data-action="open-campaign"]').forEach((button) => button.addEventListener("click", () => { window.location.hash = `#campaigns/${button.dataset.id}`; }));
+    this.content.querySelectorAll('[data-action="close-campaign"]').forEach((button) => button.addEventListener("click", () => {
+      if (!window.confirm("Finalizar esta campanha? Os vínculos ativos serão encerrados e o histórico será preservado.")) return;
+      this.campaignsService.close(button.dataset.id);
+      showToast("Campanha finalizada.", "warning");
+      this.detail(id);
+    }));
   }
 
   archive(id) {

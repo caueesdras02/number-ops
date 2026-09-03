@@ -41,7 +41,8 @@ export class NumbersService {
   create(input, { historyDescription = "Número cadastrado.", historyMetadata = {} } = {}) {
     const phone = this.validatePhone(input.phone);
     this.assertPhoneIsUnique(phone);
-    const number = createNumber({ ...input, phone });
+    const groupCount = this.validateGroupCount(input.groupCount);
+    const number = createNumber({ ...input, phone, groupCount });
     this.state.numbers = [...this.state.numbers, number];
     this.persist();
     this.record(number.id, "NUMBER_CREATED", historyDescription, { newValue: number, ...historyMetadata });
@@ -53,6 +54,7 @@ export class NumbersService {
     if (!existing) throw new Error("Número não encontrado.");
     const phone = this.validatePhone(input.phone);
     this.assertPhoneIsUnique(phone, id);
+    const groupCount = this.validateGroupCount(input.groupCount ?? existing.groupCount ?? 0);
     const updated = {
       ...existing,
       phone,
@@ -62,6 +64,7 @@ export class NumbersService {
       responsibleId: input.responsibleId || null,
       clientIds: input.clientIds ?? existing.clientIds ?? [],
       groupIds: input.groupIds ?? existing.groupIds ?? [],
+      groupCount,
       notes: input.notes.trim(),
       updatedAt: now(),
     };
@@ -132,7 +135,7 @@ export class NumbersService {
   record(numberId, type, description, metadata) { this.history.add({ numberId, type, description, metadata }); }
 
   recordChanges(previous, next) {
-    const fields = [["status", "NUMBER_STATUS_CHANGED", "Status alterado."], ["locationId", "NUMBER_LOCATION_CHANGED", "Localização alterada."], ["responsibleId", "NUMBER_RESPONSIBLE_CHANGED", "Responsável alterado."]];
+    const fields = [["status", "NUMBER_STATUS_CHANGED", "Status alterado."], ["locationId", "NUMBER_LOCATION_CHANGED", "Localização alterada."], ["responsibleId", "NUMBER_RESPONSIBLE_CHANGED", "Responsável alterado."], ["groupCount", "GROUP_COUNT_CHANGED", "Quantidade de grupos alterada."]];
     fields.forEach(([field, type, description]) => { if (previous[field] !== next[field]) this.record(next.id, type, description, { previousValue: previous[field], newValue: next[field] }); });
     [["clientIds", "CLIENT", "Cliente"], ["groupIds", "GROUP", "Squad"]].forEach(([field, key, label]) => { const oldIds = previous[field] ?? [], newIds = next[field] ?? []; newIds.filter((id) => !oldIds.includes(id)).forEach((id) => this.record(next.id, `${key}_ASSOCIATED`, `${label} associado.`, { newValue: id })); oldIds.filter((id) => !newIds.includes(id)).forEach((id) => this.record(next.id, `${key}_REMOVED`, `${label} removido.`, { previousValue: id })); });
   }
@@ -141,6 +144,12 @@ export class NumbersService {
     const normalized = normalizePhone(phone);
     if (!normalized) throw new Error("Informe o número de telefone.");
     if (!normalized.startsWith("55") || (normalized.length !== 12 && normalized.length !== 13)) throw new Error("Informe um telefone brasileiro com 55, DDD e 8 ou 9 dígitos.");
+    return normalized;
+  }
+
+  validateGroupCount(value) {
+    const normalized = value === "" || value === undefined || value === null ? 0 : Number(value);
+    if (!Number.isInteger(normalized) || normalized < 0) throw new Error("A quantidade de grupos deve ser um número inteiro maior ou igual a zero.");
     return normalized;
   }
 
