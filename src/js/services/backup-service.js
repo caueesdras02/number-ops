@@ -35,7 +35,7 @@ export class BackupService {
     if (!prepared?.state) throw new Error('Analise um backup válido antes de restaurar.');
     const state = this.normalizeLegacy(prepared.state);
     this.validateState(state);
-    this.numbersService.replaceState(clone(state));
+    return this.numbersService.replaceState(clone(state));
   }
   extractState(backup) {
     if (hasOwn(backup, 'state')) { if (!backup.state || typeof backup.state !== 'object' || Array.isArray(backup.state)) throw new Error('O estado do backup é inválido.'); return backup.state; }

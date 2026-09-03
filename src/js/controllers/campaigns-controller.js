@@ -2,7 +2,32 @@ import { renderCampaignDetail, renderCampaignForm, renderCampaigns } from "../ui
 import { showToast } from "../ui/toast.js";
 export class CampaignsController {
   constructor({ service, content }) { this.service=service; this.content=content; this.filters={query:"",status:""}; }
-  render() { const state=this.service.state; this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,filters:this.filters}); this.content.querySelector('[data-action="add"]')?.addEventListener("click",()=>this.openForm()); this.content.querySelector('[data-action="search"]')?.addEventListener("input",e=>{this.filters.query=e.target.value;this.render();}); this.content.querySelector('[data-action="status"]')?.addEventListener("change",e=>{this.filters.status=e.target.value;this.render();}); this.content.querySelectorAll('[data-action="view"]').forEach(b=>b.addEventListener("click",()=>this.detail(b.dataset.id))); this.content.querySelectorAll('[data-action="edit"]').forEach(b=>b.addEventListener("click",()=>this.openForm(b.dataset.id))); this.content.querySelectorAll('[data-action="close"]').forEach(b=>b.addEventListener("click",()=>{if(confirm("Encerrar esta campanha?")){this.service.close(b.dataset.id);showToast("Campanha encerrada.","warning");this.render();}})); }
-  detail(id) { const item=this.service.get(id); if(!item) return this.render(); const state=this.service.state; this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,numbers:state.numbers,links:this.service.state.numberCampaignLinks.filter(link=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||""))}); this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{window.location.hash="#campaigns";}); }
-  openForm(id=null) { const state=this.service.state; this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter(i=>i.isActive),squads:state.groups.filter(i=>i.isActive)})); const close=()=>this.content.querySelector(".modal-backdrop")?.remove(); this.content.querySelectorAll('[data-action="close-form"]').forEach(b=>b.addEventListener("click",close)); this.content.querySelector("#campaign-form")?.addEventListener("submit",e=>{e.preventDefault();try{const values=Object.fromEntries(new FormData(e.currentTarget));id?this.service.update(id,values):this.service.create(values);showToast(id?"Campanha atualizada.":"Campanha criada.","success");this.render();}catch(error){showToast(error.message,"error");}}); }
+  render() {
+    const state=this.service.state;
+    this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,filters:this.filters});
+    this.content.querySelector('[data-action="add"]')?.addEventListener("click",()=>this.openForm());
+    this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.render();});
+    this.content.querySelector('[data-action="status"]')?.addEventListener("change",(event)=>{this.filters.status=event.target.value;this.render();});
+    this.content.querySelectorAll('[data-action="view"]').forEach((button)=>button.addEventListener("click",()=>this.detail(button.dataset.id)));
+    this.content.querySelectorAll('[data-action="edit"]').forEach((button)=>button.addEventListener("click",()=>this.openForm(button.dataset.id)));
+    this.content.querySelectorAll('[data-action="close"]').forEach((button)=>button.addEventListener("click",async()=>{
+      if(!confirm("Encerrar esta campanha?"))return;
+      try{this.service.close(button.dataset.id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
+    }));
+  }
+  detail(id) {
+    const item=this.service.get(id);if(!item)return this.render();const state=this.service.state;
+    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,numbers:state.numbers,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||""))});
+    this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{window.location.hash="#campaigns";});
+  }
+  openForm(id=null) {
+    const state=this.service.state;
+    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive)}));
+    const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
+    this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
+    this.content.querySelector("#campaign-form")?.addEventListener("submit",async(event)=>{
+      event.preventDefault();
+      try{const values=Object.fromEntries(new FormData(event.currentTarget));id?this.service.update(id,values):this.service.create(values);await this.service.flush();showToast(id?"Campanha atualizada.":"Campanha criada.","success");this.render();}catch(error){showToast(error.message,"error");}
+    });
+  }
 }

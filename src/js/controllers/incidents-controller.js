@@ -27,13 +27,14 @@ export class IncidentsController {
     this.bindNumberLinks();
   }
 
-  toggle(id, returnToDetail = false) {
+  async toggle(id, returnToDetail = false) {
     const incident = this.service.get(id);
     if (!incident) return this.render();
     const next = incident.status === "OPEN" ? "RESOLVED" : "OPEN";
     const action = next === "RESOLVED" ? "resolver" : "reabrir";
     if (!window.confirm(`Deseja ${action} esta ocorrência?`)) return;
     this.service.setStatus(id, next);
+    try { await this.numbers.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast(next === "RESOLVED" ? "Ocorrência resolvida." : "Ocorrência reaberta.", "success");
     if (returnToDetail) this.detail(id); else this.render();
   }
@@ -42,13 +43,14 @@ export class IncidentsController {
     this.content.insertAdjacentHTML("beforeend", renderIncidentForm(id ? this.service.get(id) : null, this.numbers.state.numbers, this.numbers.getResponsibles()));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", close));
-    this.content.querySelector("#incident-form")?.addEventListener("submit", (event) => {
+    this.content.querySelector("#incident-form")?.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
       try {
         const values = Object.fromEntries(new FormData(form));
         const editing = Boolean(form.dataset.id);
         if (editing) this.service.update(form.dataset.id, values); else this.service.create(values);
+        await this.numbers.flush();
         showToast(editing ? "Ocorrência atualizada." : "Ocorrência criada.", "success");
         this.render();
       } catch (error) { showToast(error.message || "Não foi possível salvar a ocorrência.", "error"); }

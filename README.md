@@ -22,36 +22,18 @@ O objetivo é facilitar a administração dos números e permitir uma visão rá
 
 Criar uma ferramenta simples e centralizada para controlar os números utilizados pela empresa, reduzindo a necessidade de controles manuais e informações espalhadas.
 
-## V1
+## Versão atual
 
-A primeira versão será desenvolvida como uma aplicação web frontend-first.
-
-Inicialmente:
-
-- Não haverá backend;
-- Não haverá banco de dados externo;
-- Não haverá integração com SendFlow;
-- Os dados serão armazenados localmente no navegador.
-
-A arquitetura será preparada para permitir a evolução futura para backend e integrações externas.
+A aplicação é um frontend estático com autenticação e persistência compartilhada no Supabase. O localStorage permanece somente para compatibilidade, recuperação e migração controlada.
 
 ## Tecnologias
 
-### V1
-
 - HTML5
 - CSS3
-- JavaScript
-- LocalStorage / IndexedDB
-
-### Futuro
-
-- Node.js
-- Express
-- MySQL
-- API REST
-- Autenticação
-- Integrações externas
+- JavaScript ES Modules
+- Supabase Auth
+- Supabase PostgreSQL com Row Level Security
+- GitHub Pages
 
 ## Estrutura
 

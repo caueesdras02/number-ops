@@ -31,7 +31,7 @@ export class NumbersController {
     this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="review"]').forEach((button) => button.addEventListener("click", () => this.markUnderReview(button.dataset.id)));
     this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", () => { this.service.restore(button.dataset.id); this.render(); showToast('Número restaurado para operação.', 'success'); }));
+    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", async () => { try { this.service.restore(button.dataset.id); await this.service.flush(); this.render(); showToast('Número restaurado para operação.', 'success'); } catch(error) { showToast(error.message,"error"); } }));
     this.content.querySelector("#archive-filter")?.addEventListener("change", (event) => { this.archiveFilter = event.target.value; this.render(); });
     this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
     this.content.querySelectorAll('[data-action="toggle-filters"]').forEach((button) => button.addEventListener('click', () => { this.filtersOpen = !this.filtersOpen; this.render(); }));
@@ -51,7 +51,7 @@ export class NumbersController {
     this.content.querySelector('[data-action="register-restriction"]')?.addEventListener('click', () => this.openRestrictionForm(number.id));
     this.content.querySelector('[data-action="remove-restriction"]')?.addEventListener('click', () => this.removeRestriction(number.id));
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
-    this.content.querySelector('[data-action="restore"]')?.addEventListener('click', () => { this.service.restore(number.id); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); });
+    this.content.querySelector('[data-action="restore"]')?.addEventListener('click', async () => { try { this.service.restore(number.id); await this.service.flush(); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); } catch(error) { showToast(error.message,"error"); } });
     this.content.querySelectorAll('[data-target]').forEach((button) => button.addEventListener('click', () => { window.location.hash = button.dataset.target; }));
   }
 
@@ -66,7 +66,7 @@ export class NumbersController {
 
   closeForm() { this.content.querySelector(".modal-backdrop")?.remove(); }
 
-  submitForm(event) {
+  async submitForm(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
@@ -75,6 +75,7 @@ export class NumbersController {
       const editing = Boolean(form.dataset.id);
       if (editing) this.service.update(form.dataset.id, values);
       else this.service.create(values);
+      await this.service.flush();
       this.closeForm();
       this.render();
       showToast(editing ? 'Número atualizado com sucesso.' : 'Número cadastrado com sucesso.', 'success');
@@ -84,17 +85,19 @@ export class NumbersController {
     }
   }
 
-  archive(id) {
+  async archive(id) {
     const number = this.service.getNumber(id);
     if (!number || !window.confirm(`Arquivar ${number.phone}? O número ficará inativo e indisponível.`)) return;
     this.service.archive(id);
+    try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     this.render();
     showToast('Número arquivado e retirado da operação.', 'warning');
   }
 
-  markUnderReview(id, returnToDetail = false) {
+  async markUnderReview(id, returnToDetail = false) {
     if (!window.confirm("Colocar este número em análise? O status será alterado, sem criar uma ocorrência automaticamente.")) return;
     this.service.markUnderReview(id);
+    try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast("Número colocado em análise.", "success");
     if (returnToDetail) this.showDetail(id); else this.render();
   }
@@ -109,10 +112,11 @@ export class NumbersController {
     const updateOther = () => { other.hidden = kind.value !== "OTHER"; };
     kind.addEventListener("change", updateOther);
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       try {
         this.service.registerRestriction(id, Object.fromEntries(new FormData(form)));
+        await this.service.flush();
         this.closeForm();
         showToast("Restrição operacional registrada.", "success");
         this.showDetail(id);
@@ -120,9 +124,10 @@ export class NumbersController {
     });
   }
 
-  removeRestriction(id) {
+  async removeRestriction(id) {
     if (!window.confirm("Remover a restrição ativa? O status principal não será alterado.")) return;
     this.service.removeRestriction(id);
+    try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast("Restrição operacional removida.", "success");
     this.showDetail(id);
   }

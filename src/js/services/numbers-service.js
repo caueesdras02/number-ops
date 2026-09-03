@@ -128,9 +128,10 @@ export class NumbersService {
     return updated;
   }
 
-  persist() { this.repository.save(this.state); }
+  persist() { return this.repository.save(this.state); }
+  flush() { return this.repository.flush?.() ?? Promise.resolve(); }
 
-  replaceState(state) { this.state = state; this.persist(); }
+  replaceState(state) { this.state = state; return this.persist(); }
 
   record(numberId, type, description, metadata) { this.history.add({ numberId, type, description, metadata }); }
 

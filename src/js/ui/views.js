@@ -2,6 +2,7 @@ const views = Object.freeze({
   dashboard: { title: "Visão geral", description: "A base visual está pronta. Os indicadores operacionais serão incluídos quando a gestão de números estiver implementada." },
   numbers: { title: "Números", description: "A área de cadastro, listagem, edição e arquivamento será construída nas próximas fases." },
   campaigns: { title: "Campanhas", description: "Gerencie campanhas e seus vínculos operacionais." },
+  profiles: { title: "Usuários", description: "Gerencie profiles e níveis de acesso." },
   clients: { title: "Clientes", description: "" }, groups: { title: "Squads", description: "" }, responsibles: { title: "Colaboradores", description: "" },
   incidents: { title: "Ocorrências", description: "O modelo de ocorrências já está definido. O registro e a resolução serão implementados em uma etapa posterior." },
   history: { title: "Histórico", description: "Consulta dos eventos operacionais registrados." },

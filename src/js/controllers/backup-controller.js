@@ -21,8 +21,8 @@ export class BackupController {
     reader.onerror = () => { this.preview = null; this.message = "Não foi possível ler o arquivo selecionado."; showToast(this.message, "error"); this.render(); };
     reader.readAsText(file);
   }
-  restore() {
+  async restore() {
     if (!this.preview || !window.confirm("Restaurar este backup e substituir todos os dados atuais deste navegador?")) return;
-    try { this.service.restore(this.preview); showToast("Backup restaurado. Recarregando a interface…", "success", 900); window.setTimeout(() => { window.location.hash = "#dashboard"; window.location.reload(); }, 300); } catch (error) { this.message = error.message; showToast(this.message, "error"); this.render(); }
+    try { await this.service.restore(this.preview); showToast("Backup restaurado. Recarregando a interface…", "success", 900); window.setTimeout(() => { window.location.hash = "#dashboard"; window.location.reload(); }, 300); } catch (error) { this.message = error.message; showToast(this.message, "error"); this.render(); }
   }
 }

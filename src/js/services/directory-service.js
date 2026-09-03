@@ -11,4 +11,5 @@ export class DirectoryService {
   update(type, id, input) { const item = this.numbersService.state[type].find((entry) => entry.id === id); if (!item) throw new Error("Registro não encontrado."); Object.assign(item, { name: String(input.name ?? "").trim(), ...(type === "responsibles" ? { team: String(input.team ?? "").trim() } : {}), updatedAt: now() }); this.numbersService.persist(); return item; }
   archive(type, id) { const item = this.numbersService.state[type].find((entry) => entry.id === id); if (!item) throw new Error("Registro não encontrado."); item.isActive = false; item.updatedAt = now(); this.numbersService.persist(); }
   restore(type, id) { const item = this.get(type, id); if (!item) throw new Error("Registro não encontrado."); item.isActive = true; item.updatedAt = now(); this.numbersService.persist(); }
+  flush() { return this.numbersService.flush(); }
 }
