@@ -1,5 +1,7 @@
 # Number Ops
 
+> **Nota (V2):** este documento descreve o planejamento original da V1 (frontend local, sem backend). A versão em produção hoje é a **V2**, com Supabase como banco compartilhado, autenticação, usuários/níveis de acesso (ADMIN/USER/VIEWER), campanhas com vínculo de números e Audit Log. O conteúdo abaixo permanece como registro histórico da visão inicial.
+
 ## 1. Visão do Projeto
 
 O Number Ops é um sistema web para gerenciamento e controle operacional dos números/chips utilizados pela empresa em operações de WhatsApp.

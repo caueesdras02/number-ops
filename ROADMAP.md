@@ -1,5 +1,7 @@
 # Number Ops — Roadmap
 
+> **Nota (V2):** as fases abaixo (0–13) descrevem o plano original até a V1. Esse plano foi concluído e superado: o sistema está na **V2**, operacional em produção com Supabase (banco compartilhado, Auth, RLS, usuários/níveis de acesso, campanhas e Audit Log). A V3 (integrações externas como SendFlow/UniChat) ainda não foi iniciada. O conteúdo abaixo permanece como registro histórico do planejamento inicial.
+
 ## Visão Geral
 
 O desenvolvimento do Number Ops será realizado de forma incremental.

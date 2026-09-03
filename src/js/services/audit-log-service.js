@@ -28,6 +28,11 @@ const ACTION_LABELS = Object.freeze({
   CLIENT_SQUAD_CHANGED: "Squad do cliente alterado",
   SQUAD_CREATED: "Squad criado",
   SQUAD_UPDATED: "Squad editado",
+  LOCATION_CREATED: "Localização criada",
+  LOCATION_UPDATED: "Localização editada",
+  RESPONSIBLE_CREATED: "Colaborador criado",
+  RESPONSIBLE_UPDATED: "Colaborador editado",
+  RESPONSIBLE_TEAM_CHANGED: "Squad do colaborador alterado",
   INCIDENT_CREATED: "Ocorrência criada",
   INCIDENT_UPDATED: "Ocorrência editada",
   INCIDENT_RESOLVED: "Ocorrência resolvida",
@@ -39,8 +44,8 @@ const ACTION_LABELS = Object.freeze({
   PROFILE_ACCESS_LEVEL_CHANGED: "Nível de acesso alterado",
 });
 
-const ENTITY_LABELS = Object.freeze({ NUMBER: "Número", CAMPAIGN: "Campanha", CLIENT: "Cliente", SQUAD: "Squad", INCIDENT: "Ocorrência", USER: "Usuário" });
-const FIELD_LABELS = Object.freeze({ phone:"Número", identification:"Identificação", status:"Status", locationId:"Localização", responsibleId:"Responsável", groupCount:"Quantidade de grupos", notes:"Observações", squadId:"Squad", role:"Papel", campaignId:"Campanha", jobTitle:"Cargo", accessLevel:"Nível de acesso", name:"Nome" });
+const ENTITY_LABELS = Object.freeze({ NUMBER: "Número", CAMPAIGN: "Campanha", CLIENT: "Cliente", SQUAD: "Squad", INCIDENT: "Ocorrência", USER: "Usuário", LOCATION: "Localização", RESPONSIBLE: "Colaborador" });
+const FIELD_LABELS = Object.freeze({ phone:"Número", identification:"Identificação", status:"Status", locationId:"Localização", responsibleId:"Responsável", groupCount:"Quantidade de grupos", notes:"Observações", squadId:"Squad", role:"Papel", campaignId:"Campanha", jobTitle:"Cargo", accessLevel:"Nível de acesso", name:"Nome", team:"Squad" });
 
 const mapRow = (row) => ({ id:row.id,userId:row.user_id,action:row.action,entityType:row.entity_type,entityId:row.entity_id,occurredAt:row.occurred_at,previousData:row.previous_data,newData:row.new_data,metadata:row.metadata??{} });
 const normalizeKey = (key) => key.replace(/_([a-z])/g, (_,letter)=>letter.toUpperCase());
@@ -87,6 +92,8 @@ export class AuditLogService {
     if(log.entityType==="SQUAD") return squads.find((item)=>item.id===log.entityId)?.name??log.entityId;
     if(log.entityType==="INCIDENT") return state.incidents.find((item)=>item.id===log.entityId)?.title??log.entityId;
     if(log.entityType==="USER") return profiles.find((item)=>item.id===log.entityId)?.name??log.entityId;
+    if(log.entityType==="LOCATION") return state.locations.find((item)=>item.id===log.entityId)?.name??log.entityId;
+    if(log.entityType==="RESPONSIBLE") return state.responsibles.find((item)=>item.id===log.entityId)?.name??log.entityId;
     return log.entityId||"—";
   }
 

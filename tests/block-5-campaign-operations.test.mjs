@@ -96,4 +96,29 @@ assert.equal(reloadedCampaign.responsibleId, "r1");
 assert.equal(reloadedCampaigns.linksFor("n1").length, 3);
 assert.equal(reloadedCampaigns.state.campaigns.length, 1);
 
-console.log("Bloco 5: campanha↔números, responsável, encerrar/reativar e histórico validados.");
+// 13) proteção contra submit concorrente (bug de duplo clique/duplo Enter na criação de campanha)
+const { guardedSubmit } = await import("../src/js/ui/form-submit-guard.js");
+let submitCount = 0;
+const fakeButton = { disabled: false, textContent: "Salvar", isConnected: true };
+const fakeForm = { dataset: {}, querySelector: (selector) => selector === ".button-primary" ? fakeButton : null };
+const fakeEvent = { preventDefault: () => {} };
+let resolveFirstSubmit;
+guardedSubmit(fakeForm, fakeEvent, () => { submitCount++; return new Promise((resolve) => { resolveFirstSubmit = resolve; }); });
+assert.equal(fakeForm.dataset.submitting, "true", "flag lógica de submit deve ser marcada imediatamente, não só o botão desabilitado");
+assert.equal(fakeButton.disabled, true);
+assert.equal(fakeButton.textContent, "Salvando…");
+await Promise.resolve(); await Promise.resolve(); // deixa o handler do 1º submit começar (mas não terminar)
+assert.equal(submitCount, 1, "primeiro submit deve ter iniciado");
+guardedSubmit(fakeForm, fakeEvent, () => { submitCount++; }); // clique duplo / Enter repetido enquanto o 1º ainda processa
+assert.equal(submitCount, 1, "segundo submit concorrente deve ser ignorado enquanto o primeiro está em andamento");
+resolveFirstSubmit();
+await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(fakeForm.dataset.submitting, undefined, "estado deve ser restaurado após sucesso");
+assert.equal(fakeButton.disabled, false);
+assert.equal(fakeButton.textContent, "Salvar");
+guardedSubmit(fakeForm, fakeEvent, () => { submitCount++; });
+await Promise.resolve(); await Promise.resolve();
+assert.equal(submitCount, 2, "após concluir, um novo submit legítimo deve ser permitido");
+
+console.log("Bloco 5: campanha↔números, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");

@@ -1,5 +1,7 @@
 # Number Ops — Requirements
 
+> **Nota (V2):** os requisitos abaixo descrevem a V1 (sem backend/login). A V2 em produção adiciona Supabase (Postgres + RLS), Supabase Auth, perfis com níveis de acesso (ADMIN/USER/VIEWER), campanhas com vínculo de números (Principal/Backup/Apoio) e Audit Log. O conteúdo abaixo permanece como registro histórico.
+
 ## 1. Objetivo
 
 Definir os requisitos funcionais e as regras de comportamento da primeira versão do Number Ops.
