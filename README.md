@@ -15,6 +15,9 @@ A aplicação permite acompanhar informações como:
 - Grupos relacionados;
 - Ocorrências;
 - Histórico de alterações.
+- Campanhas e papéis operacionais;
+- Usuários e níveis de acesso;
+- Registro de atividades (Audit Log).
 
 O objetivo é facilitar a administração dos números e permitir uma visão rápida da situação operacional de cada um.
 
@@ -25,6 +28,10 @@ Criar uma ferramenta simples e centralizada para controlar os números utilizado
 ## Versão atual
 
 A aplicação é um frontend estático com autenticação e persistência compartilhada no Supabase. O localStorage permanece somente para compatibilidade, recuperação e migração controlada.
+
+Produção: https://caueesdras02.github.io/number-ops/
+
+O Audit Log é gerado no banco por triggers autenticadas e consultado por administradores em modo somente leitura. Para uma instalação nova, execute `supabase/schema.sql`, `supabase/002_operational_policies.sql` e `supabase/003_audit_log.sql`, nessa ordem.
 
 ## Tecnologias
 

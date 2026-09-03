@@ -25,7 +25,10 @@ export class CampaignsController {
     this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive)}));
     const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
-    this.content.querySelector("#campaign-form")?.addEventListener("submit",async(event)=>{
+    const form=this.content.querySelector("#campaign-form"),squadSelect=form?.elements.squadId,clientSelect=form?.elements.clientId;
+    const refreshClients=()=>{if(!clientSelect)return;const current=clientSelect.value;clientSelect.replaceChildren(new Option("Selecione",""));state.clients.filter((item)=>item.isActive&&(!squadSelect.value||!item.squadId||item.squadId===squadSelect.value)).forEach((item)=>clientSelect.append(new Option(`${item.name}${item.squadId?"":" · Sem Squad"}`,item.id,false,item.id===current)));};
+    squadSelect?.addEventListener("change",refreshClients);refreshClients();
+    form?.addEventListener("submit",async(event)=>{
       event.preventDefault();
       try{const values=Object.fromEntries(new FormData(event.currentTarget));id?this.service.update(id,values):this.service.create(values);await this.service.flush();showToast(id?"Campanha atualizada.":"Campanha criada.","success");this.render();}catch(error){showToast(error.message,"error");}
     });

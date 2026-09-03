@@ -7,7 +7,7 @@ export class DirectoryController {
   constructor({ service, campaignsService = null, content, type }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.type = type; this.query = ""; }
 
   render() {
-    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query);
+    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query, this.service.numbersService.state.groups);
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
     this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.render(); });
     this.content.querySelector('[data-action="clear-search"]')?.addEventListener("click", () => { this.query = ""; this.render(); });
@@ -46,7 +46,7 @@ export class DirectoryController {
   }
 
   openForm(id = null) {
-    this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}));
+    this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}, this.service.list("groups")));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", close));
     this.content.querySelector("#directory-form")?.addEventListener("submit", async (event) => {

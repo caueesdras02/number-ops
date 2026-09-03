@@ -5,16 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Number Ops — controle operacional de números." />
     <title>Number Ops</title>
+    <link rel="icon" type="image/png" href="./src/assets/number-ops-logo.png" />
     <link rel="stylesheet" href="./src/css/main.css" />
   </head>
   <body>
     <div id="app" class="app-shell">
       <button class="mobile-nav-overlay" type="button" data-mobile-nav-close aria-label="Fechar menu"></button>
       <aside class="sidebar" id="primary-navigation" aria-label="Navegação principal">
-        <a class="brand" href="#dashboard" aria-label="Number Ops, página inicial">
+        <button class="brand" type="button" data-about-open aria-label="Abrir Sobre o Number Ops">
           <img class="brand-logo" src="./src/assets/number-ops-logo.png" alt="Number Ops" />
           <span class="brand-copy"><strong>Number Ops</strong><small>Controle operacional</small></span>
-        </a>
+        </button>
         <nav class="navigation" aria-label="Seções do sistema">
           <a class="navigation-link is-active" href="#dashboard" data-view="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span>Visão geral</span></a>
           <a class="navigation-link" href="#numbers" data-view="numbers"><span class="nav-icon" aria-hidden="true">#</span><span>Números</span></a>
@@ -25,16 +26,17 @@
           <a class="navigation-link" href="#profiles" data-view="profiles"><span class="nav-icon" aria-hidden="true">◎</span><span>Usuários</span></a>
           <a class="navigation-link" href="#incidents" data-view="incidents"><span class="nav-icon" aria-hidden="true">!</span><span>Ocorrências</span></a>
           <a class="navigation-link" href="#history" data-view="history"><span class="nav-icon" aria-hidden="true">↺</span><span>Histórico</span></a>
+          <a class="navigation-link" href="#activity" data-view="activity" data-admin-only hidden><span class="nav-icon" aria-hidden="true">≡</span><span>Registro de atividades</span></a>
           <a class="navigation-link" href="#guide" data-view="guide"><span class="nav-icon" aria-hidden="true">✦</span><span>Boas práticas</span></a>
           <a class="navigation-link" href="#backup" data-view="backup"><span class="nav-icon" aria-hidden="true">⇅</span><span>Dados e Backup</span></a>
         </nav>
-        <p class="sidebar-note">V1.2 · dados locais no navegador</p>
+        <p class="sidebar-note">V2 · dados compartilhados com Supabase</p>
       </aside>
       <main class="main-content">
         <header class="topbar">
           <button class="mobile-menu-toggle" type="button" data-mobile-nav-toggle aria-label="Abrir menu" aria-controls="primary-navigation" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg></button>
           <div><p class="eyebrow">Operação</p><h1 id="page-title">Visão geral</h1></div>
-          <div class="topbar-actions"><span class="environment-label">Em desenvolvimento - V1.2</span><button class="button button-quiet" type="button" data-auth-logout hidden>Sair</button></div>
+          <div class="topbar-actions"><span class="environment-label">Number Ops V2</span><button class="button button-quiet" type="button" data-auth-logout hidden>Sair</button></div>
         </header>
       <section id="page-content" class="page-content" aria-live="polite"></section>
       <footer class="app-footer">Desenvolvido por Cauê Esdras</footer>

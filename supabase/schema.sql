@@ -165,16 +165,17 @@ create index history_events_number_occurred_idx on public.history_events (number
 
 create table public.audit_logs (
   id bigint generated always as identity primary key,
-  actor_id uuid references public.profiles(id) on delete set null,
+  user_id uuid references public.profiles(id) on delete set null,
   action text not null,
-  table_name text not null,
-  record_id text,
-  old_data jsonb,
+  entity_type text not null,
+  entity_id text,
+  previous_data jsonb,
   new_data jsonb,
+  metadata jsonb not null default '{}'::jsonb,
   occurred_at timestamptz not null default now()
 );
-create index audit_logs_actor_idx on public.audit_logs (actor_id);
-create index audit_logs_table_record_idx on public.audit_logs (table_name, record_id);
+create index audit_logs_user_idx on public.audit_logs (user_id);
+create index audit_logs_entity_idx on public.audit_logs (entity_type, entity_id);
 create index audit_logs_occurred_idx on public.audit_logs (occurred_at desc);
 
 create or replace function public.current_profile_is_active()

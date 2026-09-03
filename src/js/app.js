@@ -25,6 +25,9 @@ import { AuthService } from "./services/auth-service.js";
 import { AuthController } from "./controllers/auth-controller.js";
 import { ProfilesService } from "./services/profiles-service.js";
 import { ProfilesController } from "./controllers/profiles-controller.js";
+import { AuditLogService } from "./services/audit-log-service.js";
+import { AuditLogController } from "./controllers/audit-log-controller.js";
+import { AboutController } from "./controllers/about-controller.js";
 
 const content=document.querySelector("#page-content");
 const title=document.querySelector("#page-title");
@@ -36,7 +39,9 @@ const mobileNavClose=document.querySelector("[data-mobile-nav-close]");
 const logoutButton=document.querySelector("[data-auth-logout]");
 let controllers=null;
 let profilesController=null;
+let auditLogController=null;
 let internalRoutesEnabled=false;
+new AboutController({trigger:document.querySelector("[data-about-open]")}).bind();
 
 function createOperationalControllers(repository,{runLegacyMaintenance=false}={}) {
   const numbersService=new NumbersService(repository);
@@ -50,7 +55,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false}={}
   const directoryService=new DirectoryService(numbersService);
   return {
     numbersService,
-    numbers:new NumbersController({service:numbersService,content}),
+    numbers:new NumbersController({service:numbersService,campaignsService,content}),
     campaigns:new CampaignsController({service:campaignsService,content}),
     directories:Object.fromEntries(["clients","groups","responsibles"].map((type)=>[type,new DirectoryController({service:directoryService,campaignsService,content,type})])),
     incidents:new IncidentsController({service:new IncidentsService(numbersService,new HistoryService(numbersService)),numbers:numbersService,content}),
@@ -68,6 +73,8 @@ function showView(viewName) {
   else if(view==="numbers")resourceId?controllers.numbers.showDetail(resourceId):controllers.numbers.render();
   else if(view==="campaigns")resourceId?controllers.campaigns.detail(resourceId):controllers.campaigns.render();
   else if(view==="profiles"&&profilesController)profilesController.render();
+  else if(view==="activity"&&auditLogController)auditLogController.render();
+  else if(view==="activity"){window.location.hash="#dashboard";return;}
   else if(controllers.directories[view])controllers.directories[view].render();
   else if(view==="incidents")controllers.incidents.render();
   else if(view==="history")controllers.history.render();
@@ -107,10 +114,13 @@ async function bootstrap() {
   try{authenticated=await authService.getActiveSession();}catch{await authController.render();return;}
   if(!authenticated){await authController.render();return;}
   appShell.classList.remove("is-auth-screen");
+  appShell.dataset.accessLevel=authenticated.profile.access_level;
   content.innerHTML='<section class="directory-empty"><div><h2>Carregando dados compartilhados…</h2><p>Sincronizando com o Supabase.</p></div></section>';
   const remoteRepository=await SupabaseStateRepository.create(supabase);
   controllers=createOperationalControllers(remoteRepository);
   profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),content,currentProfile:authenticated.profile});
+  if(authenticated.profile.access_level==="ADMIN") auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
+  document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=authenticated.profile.access_level!=="ADMIN";});
   const profileLabel=document.createElement("span");
   profileLabel.dataset.profileLabel="";
   profileLabel.className="environment-label";

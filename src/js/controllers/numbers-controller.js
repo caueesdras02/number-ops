@@ -1,10 +1,11 @@
 import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
-import { renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
+import { renderCampaignLinkForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
 import { showToast } from '../ui/toast.js';
 
 export class NumbersController {
-  constructor({ service, content }) {
+  constructor({ service, campaignsService, content }) {
     this.service = service;
+    this.campaignsService = campaignsService;
     this.content = content;
     this.query = "";
     this.archiveFilter = "ALL";
@@ -13,8 +14,28 @@ export class NumbersController {
   }
 
   render() {
-    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen);
+    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen, this.service.state.campaigns, this.service.state.numberCampaignLinks);
+    this.decorateCampaignContext();
     this.bindPageEvents();
+  }
+
+  decorateCampaignContext() {
+    const panel=this.content.querySelector(".filters-panel");
+    if(panel) {
+      const campaignLabel=document.createElement("label");campaignLabel.className="filter-label";campaignLabel.textContent="Campanha";
+      const campaignSelect=document.createElement("select");campaignSelect.className="input";campaignSelect.dataset.filter="campaignId";
+      campaignSelect.append(new Option("Todas",""),...this.service.state.campaigns.filter((item)=>item.status==="ACTIVE").map((item)=>new Option(item.name,item.id,false,item.id===this.filters.campaignId)));
+      campaignLabel.append(campaignSelect);panel.append(campaignLabel);
+      const stateLabel=document.createElement("label");stateLabel.className="filter-label";stateLabel.textContent="Campanha atual";
+      const stateSelect=document.createElement("select");stateSelect.className="input";stateSelect.dataset.filter="campaignState";
+      stateSelect.append(new Option("Todos",""),new Option("Disponível","AVAILABLE",false,this.filters.campaignState==="AVAILABLE"),new Option("Em campanha","IN_CAMPAIGN",false,this.filters.campaignState==="IN_CAMPAIGN"));
+      stateLabel.append(stateSelect);panel.append(stateLabel);
+    }
+    this.content.querySelectorAll('[data-action="view"]').forEach((button)=>{
+      const link=this.campaignsService.activeLinkFor(button.dataset.id),campaign=this.campaignsService.get(link?.campaignId);
+      const badge=document.createElement("span");badge.className=`status-badge ${link?"status-active":"status-inactive"}`;badge.textContent=link?`Em campanha: ${campaign?.name||"Ativa"}`:"Disponível";
+      button.closest(".number-record")?.querySelector(".record-status")?.append(badge);
+    });
   }
 
   bindPageEvents() {
@@ -41,7 +62,7 @@ export class NumbersController {
   showDetail(id) {
     const number = this.service.getNumber(id);
     if (!number) return this.render();
-    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id) });
+    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id), campaigns:this.service.state.campaigns, campaignLinks:this.campaignsService.linksFor(number.id) });
     this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => {
       if (window.location.hash !== "#numbers") window.location.hash = "#numbers";
       else this.render();
@@ -50,6 +71,8 @@ export class NumbersController {
     this.content.querySelector('[data-action="review"]')?.addEventListener('click', () => this.markUnderReview(number.id, true));
     this.content.querySelector('[data-action="register-restriction"]')?.addEventListener('click', () => this.openRestrictionForm(number.id));
     this.content.querySelector('[data-action="remove-restriction"]')?.addEventListener('click', () => this.removeRestriction(number.id));
+    this.content.querySelector('[data-action="manage-campaign"]')?.addEventListener('click', () => this.openCampaignForm(number.id));
+    this.content.querySelector('[data-action="end-campaign-link"]')?.addEventListener('click', () => this.endCampaignLink(number.id));
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
     this.content.querySelector('[data-action="restore"]')?.addEventListener('click', async () => { try { this.service.restore(number.id); await this.service.flush(); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); } catch(error) { showToast(error.message,"error"); } });
     this.content.querySelectorAll('[data-target]').forEach((button) => button.addEventListener('click', () => { window.location.hash = button.dataset.target; }));
@@ -100,6 +123,25 @@ export class NumbersController {
     try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast("Número colocado em análise.", "success");
     if (returnToDetail) this.showDetail(id); else this.render();
+  }
+
+  openCampaignForm(id) {
+    const number=this.service.getNumber(id);if(!number)return;
+    const activeLink=this.campaignsService.activeLinkFor(id);
+    this.content.insertAdjacentHTML("beforeend",renderCampaignLinkForm(number,this.service.state.campaigns,activeLink));
+    const close=()=>this.closeForm();
+    this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
+    this.content.querySelector("#campaign-link-form")?.addEventListener("submit",async(event)=>{
+      event.preventDefault();
+      try { const values=Object.fromEntries(new FormData(event.currentTarget));this.campaignsService.assign(id,values.campaignId,values.role);await this.campaignsService.flush();close();showToast(activeLink?"Vínculo de campanha atualizado.":"Número vinculado à campanha.","success");this.showDetail(id); }
+      catch(error){showToast(error.message,"error");}
+    });
+  }
+
+  async endCampaignLink(id) {
+    if(!window.confirm("Encerrar o vínculo ativo desta campanha? O histórico será preservado."))return;
+    try { this.campaignsService.unassign(id);await this.campaignsService.flush();showToast("Vínculo de campanha encerrado.","warning");this.showDetail(id); }
+    catch(error){showToast(error.message,"error");}
   }
 
   openRestrictionForm(id) {

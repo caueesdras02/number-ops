@@ -8,6 +8,10 @@ export class NumbersService {
   constructor(repository) {
     this.repository = repository;
     this.state = repository.initialize();
+    this.state.campaigns ??= [];
+    this.state.numberCampaignLinks ??= [];
+    this.state.numbers = (this.state.numbers ?? []).map((number) => ({ ...number, groupCount: number.groupCount ?? 0 }));
+    this.state.clients = (this.state.clients ?? []).map((client) => ({ ...client, squadId: client.squadId ?? null }));
     this.history = new HistoryService(this);
     this.initializeSeed();
   }
@@ -23,10 +27,13 @@ export class NumbersService {
   getNumbers(query = "", filters = {}) {
     const normalizedQuery = normalizePhone(query);
     return this.state.numbers.filter((number) => {
+      const activeCampaignLink=this.state.numberCampaignLinks.find((link)=>link.numberId===number.id&&!link.endedAt);
       const matchesQuery = !normalizedQuery || number.phone.includes(normalizedQuery);
       const archiveFilter = filters.archiveFilter ?? "ALL";
       const matchesArchive = archiveFilter === "ARCHIVED" ? Boolean(number.archivedAt) : archiveFilter === "ACTIVE" ? !number.archivedAt : true;
-      return matchesQuery && matchesArchive && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
+      const matchesCampaign=!filters.campaignId||activeCampaignLink?.campaignId===filters.campaignId;
+      const matchesCampaignState=!filters.campaignState||(filters.campaignState==="IN_CAMPAIGN"?Boolean(activeCampaignLink):!activeCampaignLink);
+      return matchesQuery && matchesArchive && matchesCampaign && matchesCampaignState && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
     });
   }
 
