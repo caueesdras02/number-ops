@@ -1,5 +1,6 @@
 import { renderIncidents, renderIncidentForm, renderIncidentDetail } from "../ui/incidents-view.js";
 import { showToast } from "../ui/toast.js";
+import { guardedSubmit } from "../ui/form-submit-guard.js";
 
 export class IncidentsController {
   constructor({ service, numbers, content }) { this.service = service; this.numbers = numbers; this.content = content; this.filters = {}; }
@@ -43,17 +44,16 @@ export class IncidentsController {
     this.content.insertAdjacentHTML("beforeend", renderIncidentForm(id ? this.service.get(id) : null, this.numbers.state.numbers, this.numbers.getResponsibles()));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", close));
-    this.content.querySelector("#incident-form")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
+    const incidentForm = this.content.querySelector("#incident-form");
+    incidentForm?.addEventListener("submit", (event) => guardedSubmit(incidentForm, event, async () => {
       try {
-        const values = Object.fromEntries(new FormData(form));
-        const editing = Boolean(form.dataset.id);
-        if (editing) this.service.update(form.dataset.id, values); else this.service.create(values);
+        const values = Object.fromEntries(new FormData(incidentForm));
+        const editing = Boolean(incidentForm.dataset.id);
+        if (editing) this.service.update(incidentForm.dataset.id, values); else this.service.create(values);
         await this.numbers.flush();
         showToast(editing ? "Ocorrência atualizada." : "Ocorrência criada.", "success");
         this.render();
       } catch (error) { showToast(error.message || "Não foi possível salvar a ocorrência.", "error"); }
-    });
+    }));
   }
 }

@@ -1,6 +1,7 @@
 import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
 import { renderCampaignLinkForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
 import { showToast } from '../ui/toast.js';
+import { guardedSubmit } from '../ui/form-submit-guard.js';
 
 export class NumbersController {
   constructor({ service, campaignsService, content }) {
@@ -84,7 +85,7 @@ export class NumbersController {
     const form = this.content.querySelector("#number-form");
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
-    form.addEventListener("submit", (event) => this.submitForm(event));
+    form.addEventListener("submit", (event) => guardedSubmit(form, event, () => this.submitForm(event)));
   }
 
   closeForm() { this.content.querySelector(".modal-backdrop")?.remove(); }
@@ -131,11 +132,11 @@ export class NumbersController {
     this.content.insertAdjacentHTML("beforeend",renderCampaignLinkForm(number,this.service.state.campaigns,activeLink));
     const close=()=>this.closeForm();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
-    this.content.querySelector("#campaign-link-form")?.addEventListener("submit",async(event)=>{
-      event.preventDefault();
-      try { const values=Object.fromEntries(new FormData(event.currentTarget));this.campaignsService.assign(id,values.campaignId,values.role);await this.campaignsService.flush();close();showToast(activeLink?"Vínculo de campanha atualizado.":"Número vinculado à campanha.","success");this.showDetail(id); }
+    const linkForm=this.content.querySelector("#campaign-link-form");
+    linkForm?.addEventListener("submit",(event)=>guardedSubmit(linkForm,event,async()=>{
+      try { const values=Object.fromEntries(new FormData(linkForm));this.campaignsService.assign(id,values.campaignId,values.role);await this.campaignsService.flush();close();showToast(activeLink?"Vínculo de campanha atualizado.":"Número vinculado à campanha.","success");this.showDetail(id); }
       catch(error){showToast(error.message,"error");}
-    });
+    }));
   }
 
   async endCampaignLink(id) {
@@ -154,8 +155,7 @@ export class NumbersController {
     const updateOther = () => { other.hidden = kind.value !== "OTHER"; };
     kind.addEventListener("change", updateOther);
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    form.addEventListener("submit", (event) => guardedSubmit(form, event, async () => {
       try {
         this.service.registerRestriction(id, Object.fromEntries(new FormData(form)));
         await this.service.flush();
@@ -163,7 +163,7 @@ export class NumbersController {
         showToast("Restrição operacional registrada.", "success");
         this.showDetail(id);
       } catch (error) { showToast(error.message, "error"); }
-    });
+    }));
   }
 
   async removeRestriction(id) {

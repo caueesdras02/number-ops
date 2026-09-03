@@ -37,7 +37,13 @@ export class NumbersService {
     });
   }
 
-  getNumbersFor(type, id) { const field = type === "clients" ? "clientIds" : "groupIds"; return this.state.numbers.filter((number) => number[field].includes(id)); }
+  getNumbersFor(type, id) {
+    if (type === "clients") return this.state.numbers.filter((number) => number.clientIds.includes(id));
+    if (type === "groups") return this.state.numbers.filter((number) => number.groupIds.includes(id));
+    if (type === "locations") return this.state.numbers.filter((number) => number.locationId === id);
+    if (type === "responsibles") return this.state.numbers.filter((number) => number.responsibleId === id);
+    return [];
+  }
 
   getNumber(id) { return this.state.numbers.find((number) => number.id === id) ?? null; }
   getLocations() { return [...this.state.locations].filter((location) => location.isActive); }

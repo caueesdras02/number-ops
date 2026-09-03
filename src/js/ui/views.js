@@ -3,7 +3,7 @@ const views = Object.freeze({
   numbers: { title: "Números", description: "A área de cadastro, listagem, edição e arquivamento será construída nas próximas fases." },
   campaigns: { title: "Campanhas", description: "Gerencie campanhas e seus vínculos operacionais." },
   profiles: { title: "Usuários", description: "Gerencie profiles e níveis de acesso." },
-  clients: { title: "Clientes", description: "" }, groups: { title: "Squads", description: "" }, responsibles: { title: "Colaboradores", description: "" },
+  clients: { title: "Clientes", description: "" }, groups: { title: "Squads", description: "" }, responsibles: { title: "Colaboradores", description: "" }, locations: { title: "Localizações", description: "" },
   incidents: { title: "Ocorrências", description: "O modelo de ocorrências já está definido. O registro e a resolução serão implementados em uma etapa posterior." },
   history: { title: "Histórico", description: "Consulta dos eventos operacionais registrados." },
   activity: { title: "Registro de atividades", description: "Rastreabilidade das alterações realizadas no sistema." },

@@ -1,7 +1,8 @@
 import { renderDirectory, renderDirectoryDetail, renderDirectoryForm } from "../ui/directory-view.js";
 import { showToast } from "../ui/toast.js";
+import { guardedSubmit } from "../ui/form-submit-guard.js";
 
-const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador" };
+const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador", locations: "Localização" };
 
 export class DirectoryController {
   constructor({ service, campaignsService = null, content, type }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.type = type; this.query = ""; }
@@ -49,17 +50,16 @@ export class DirectoryController {
     this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}, this.service.list("groups")));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", close));
-    this.content.querySelector("#directory-form")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
+    const directoryForm = this.content.querySelector("#directory-form");
+    directoryForm?.addEventListener("submit", (event) => guardedSubmit(directoryForm, event, async () => {
       try {
-        const values = Object.fromEntries(new FormData(form));
-        const isUpdate = Boolean(form.dataset.id);
-        if (isUpdate) this.service.update(this.type, form.dataset.id, values); else this.service.create(this.type, values);
+        const values = Object.fromEntries(new FormData(directoryForm));
+        const isUpdate = Boolean(directoryForm.dataset.id);
+        if (isUpdate) this.service.update(this.type, directoryForm.dataset.id, values); else this.service.create(this.type, values);
         await this.service.flush();
         showToast(`${labels[this.type]} ${isUpdate ? "atualizado" : "adicionado"}.`, "success");
         this.render();
       } catch (error) { showToast(error.message || "Não foi possível salvar o registro.", "error"); }
-    });
+    }));
   }
 }

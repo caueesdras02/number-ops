@@ -17,6 +17,8 @@ const ACTION_LABELS = Object.freeze({
   CAMPAIGN_CREATED: "Campanha criada",
   CAMPAIGN_UPDATED: "Campanha editada",
   CAMPAIGN_CLOSED: "Campanha encerrada",
+  CAMPAIGN_REACTIVATED: "Campanha reativada",
+  CAMPAIGN_RESPONSIBLE_CHANGED: "Responsável da campanha alterado",
   NUMBER_CAMPAIGN_LINKED: "Número vinculado à campanha",
   NUMBER_CAMPAIGN_CHANGED: "Campanha do número alterada",
   NUMBER_CAMPAIGN_ROLE_CHANGED: "Papel do número alterado",
@@ -39,6 +41,7 @@ const ACTION_LABELS = Object.freeze({
 
 const ENTITY_LABELS = Object.freeze({ NUMBER: "Número", CAMPAIGN: "Campanha", CLIENT: "Cliente", SQUAD: "Squad", INCIDENT: "Ocorrência", USER: "Usuário" });
 const FIELD_LABELS = Object.freeze({ phone:"Número", identification:"Identificação", status:"Status", locationId:"Localização", responsibleId:"Responsável", groupCount:"Quantidade de grupos", notes:"Observações", squadId:"Squad", role:"Papel", campaignId:"Campanha", jobTitle:"Cargo", accessLevel:"Nível de acesso", name:"Nome" });
+
 const mapRow = (row) => ({ id:row.id,userId:row.user_id,action:row.action,entityType:row.entity_type,entityId:row.entity_id,occurredAt:row.occurred_at,previousData:row.previous_data,newData:row.new_data,metadata:row.metadata??{} });
 const normalizeKey = (key) => key.replace(/_([a-z])/g, (_,letter)=>letter.toUpperCase());
 const comparable = (value) => JSON.stringify(value ?? null);
