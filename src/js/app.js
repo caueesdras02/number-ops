@@ -99,6 +99,7 @@ window.addEventListener("keydown",(event)=>{if(event.key==="Escape"){content.que
 window.matchMedia("(min-width: 861px)").addEventListener("change",(event)=>{if(event.matches)setMobileNavigation(false);});
 
 async function bootstrap() {
+  const isPasswordRecovery=window.location.hash.includes("type=recovery");
   const supabase=await createConfiguredSupabaseClient();
   if(!supabase) {
     controllers=createOperationalControllers(new AppRepository(),{runLegacyMaintenance:true});
@@ -110,6 +111,7 @@ async function bootstrap() {
   const repositories=createSupabaseRepositories(supabase);
   const authService=new AuthService(new SupabaseAuthRepository(supabase));
   const authController=new AuthController({service:authService,root:appShell});
+  if(isPasswordRecovery) { authController.mode="reset"; await authController.render(); return; }
   let authenticated=null;
   try{authenticated=await authService.getActiveSession();}catch{await authController.render();return;}
   if(!authenticated){await authController.render();return;}

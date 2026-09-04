@@ -42,6 +42,15 @@ export class AuthService {
     return this.authRepository.signOut();
   }
 
+  async requestPasswordReset(email) {
+    return this.authRepository.requestPasswordReset(String(email).trim());
+  }
+
+  async updatePassword(password) {
+    if (String(password ?? "").length < 8) throw new Error("A senha deve ter pelo menos 8 caracteres.");
+    return this.authRepository.updatePassword(password);
+  }
+
   async listActiveSquads() { return this.authRepository.listRegistrationSquads(); }
   onAuthStateChange(callback) { return this.authRepository.onAuthStateChange(callback); }
 }

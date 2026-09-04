@@ -85,10 +85,27 @@ export class NumbersController {
     const form = this.content.querySelector("#number-form");
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
+    form.querySelectorAll("[data-relation-search]").forEach((input) => input.addEventListener("input", () => this.filterRelationOptions(form, input)));
     form.addEventListener("submit", (event) => guardedSubmit(form, event, () => this.submitForm(event)));
   }
 
   closeForm() { this.content.querySelector(".modal-backdrop")?.remove(); }
+
+  filterRelationOptions(form, input) {
+    const group = input.dataset.relationSearch;
+    const optionsContainer = form.querySelector(`[data-relation-options="${group}"]`);
+    if (!optionsContainer) return;
+    const query = input.value.trim().toLocaleLowerCase("pt-BR");
+    const options = [...optionsContainer.querySelectorAll(".check-option")];
+    let visibleCount = 0;
+    options.forEach((option) => {
+      const matches = !query || option.textContent.toLocaleLowerCase("pt-BR").includes(query);
+      option.hidden = !matches;
+      if (matches) visibleCount++;
+    });
+    const emptyHint = form.querySelector(`[data-relation-empty="${group}"]`);
+    if (emptyHint) emptyHint.hidden = visibleCount !== 0 || options.length === 0;
+  }
 
   async submitForm(event) {
     event.preventDefault();

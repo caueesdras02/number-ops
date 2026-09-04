@@ -61,7 +61,8 @@ assert.equal(legacyService.state.clients[0].squadId,null);
 
 const index=await readFile(new URL("../index.html",import.meta.url),"utf8");
 assert.equal((index.match(/data-view="activity"/g)||[]).length,1);
-assert.match(index,/href="\.\/src\/assets\/number-ops-logo\.png"/);
+assert.match(index,/<link rel="icon"[^>]*href="\.\/src\/assets\/favicon\.png"/);
+assert.match(index,/class="brand-logo" src="\.\/src\/assets\/number-ops-logo\.png"/);
 assert.match(index,/data-about-open/);
 const sql=await readFile(new URL("../supabase/003_audit_log.sql",import.meta.url),"utf8");
 for(const table of ["numbers","restrictions","number_clients","number_squads","campaigns","number_campaign_links","clients","squads","incidents","profiles"]) assert.match(sql,new RegExp(`['\"]${table}['\"]`));
