@@ -1,10 +1,11 @@
 import { renderAuditDetail, renderAuditLog } from "../ui/audit-log-view.js";
+import { escapeHtml } from "../ui/number-presentation.js";
 
 export class AuditLogController {
   constructor({ service,content }) { this.service=service;this.content=content;this.filters={};this.data=null; }
   async render() {
     try { this.data=await this.service.load();this.paint(); }
-    catch(error) { this.content.innerHTML=`<div class="backup-feedback" role="alert">${error.message}</div>`; }
+    catch(error) { this.content.innerHTML=`<div class="backup-feedback" role="alert">${escapeHtml(error.message)}</div>`; }
   }
   paint() {
     const filtered=this.service.filter(this.data.logs,this.filters);

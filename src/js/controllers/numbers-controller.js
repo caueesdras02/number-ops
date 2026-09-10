@@ -2,6 +2,7 @@ import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
 import { renderCampaignLinkForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
 import { showToast } from '../ui/toast.js';
 import { guardedSubmit } from '../ui/form-submit-guard.js';
+import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
 
 export class NumbersController {
   constructor({ service, campaignsService, content }) {
@@ -16,27 +17,7 @@ export class NumbersController {
 
   render() {
     this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen, this.service.state.campaigns, this.service.state.numberCampaignLinks);
-    this.decorateCampaignContext();
     this.bindPageEvents();
-  }
-
-  decorateCampaignContext() {
-    const panel=this.content.querySelector(".filters-panel");
-    if(panel) {
-      const campaignLabel=document.createElement("label");campaignLabel.className="filter-label";campaignLabel.textContent="Campanha";
-      const campaignSelect=document.createElement("select");campaignSelect.className="input";campaignSelect.dataset.filter="campaignId";
-      campaignSelect.append(new Option("Todas",""),...this.service.state.campaigns.filter((item)=>item.status==="ACTIVE").map((item)=>new Option(item.name,item.id,false,item.id===this.filters.campaignId)));
-      campaignLabel.append(campaignSelect);panel.append(campaignLabel);
-      const stateLabel=document.createElement("label");stateLabel.className="filter-label";stateLabel.textContent="Campanha atual";
-      const stateSelect=document.createElement("select");stateSelect.className="input";stateSelect.dataset.filter="campaignState";
-      stateSelect.append(new Option("Todos",""),new Option("Disponível","AVAILABLE",false,this.filters.campaignState==="AVAILABLE"),new Option("Em campanha","IN_CAMPAIGN",false,this.filters.campaignState==="IN_CAMPAIGN"));
-      stateLabel.append(stateSelect);panel.append(stateLabel);
-    }
-    this.content.querySelectorAll('[data-action="view"]').forEach((button)=>{
-      const link=this.campaignsService.activeLinkFor(button.dataset.id),campaign=this.campaignsService.get(link?.campaignId);
-      const badge=document.createElement("span");badge.className=`status-badge ${link?"status-active":"status-inactive"}`;badge.textContent=link?`Em campanha: ${campaign?.name||"Ativa"}`:"Disponível";
-      button.closest(".number-record")?.querySelector(".record-status")?.append(badge);
-    });
   }
 
   bindPageEvents() {
@@ -53,6 +34,7 @@ export class NumbersController {
     this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="review"]').forEach((button) => button.addEventListener("click", () => this.markUnderReview(button.dataset.id)));
     this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
+    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id)));
     this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", async () => { try { this.service.restore(button.dataset.id); await this.service.flush(); this.render(); showToast('Número restaurado para operação.', 'success'); } catch(error) { showToast(error.message,"error"); } }));
     this.content.querySelector("#archive-filter")?.addEventListener("change", (event) => { this.archiveFilter = event.target.value; this.render(); });
     this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
@@ -63,7 +45,7 @@ export class NumbersController {
   showDetail(id) {
     const number = this.service.getNumber(id);
     if (!number) return this.render();
-    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id), campaigns:this.service.state.campaigns, campaignLinks:this.campaignsService.linksFor(number.id) });
+    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id), campaigns:this.service.state.campaigns, campaignLinks:this.campaignsService.linksFor(number.id), utilization:this.service.utilizationOf(number) });
     this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => {
       if (window.location.hash !== "#numbers") window.location.hash = "#numbers";
       else this.render();
@@ -75,13 +57,15 @@ export class NumbersController {
     this.content.querySelector('[data-action="manage-campaign"]')?.addEventListener('click', () => this.openCampaignForm(number.id));
     this.content.querySelector('[data-action="end-campaign-link"]')?.addEventListener('click', () => this.endCampaignLink(number.id));
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
+    this.content.querySelector('[data-action="hard-delete"]')?.addEventListener('click', () => this.hardDelete(number.id, true));
     this.content.querySelector('[data-action="restore"]')?.addEventListener('click', async () => { try { this.service.restore(number.id); await this.service.flush(); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); } catch(error) { showToast(error.message,"error"); } });
     this.content.querySelectorAll('[data-target]').forEach((button) => button.addEventListener('click', () => { window.location.hash = button.dataset.target; }));
   }
 
   openForm(id = null, message = "") {
     const number = id ? this.service.getNumber(id) : null;
-    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message }));
+    const activeLink = id ? this.campaignsService.activeLinkFor(id) : null;
+    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), campaigns: this.service.state.campaigns, activeLink, message }));
     const form = this.content.querySelector("#number-form");
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
@@ -114,8 +98,8 @@ export class NumbersController {
     const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
     try {
       const editing = Boolean(form.dataset.id);
-      if (editing) this.service.update(form.dataset.id, values);
-      else this.service.create(values);
+      const record = editing ? this.service.update(form.dataset.id, values) : this.service.create(values);
+      this.applyCampaignSelection(record.id, values.campaignId || "", values.campaignRole || "PRIMARY");
       await this.service.flush();
       this.closeForm();
       this.render();
@@ -126,6 +110,14 @@ export class NumbersController {
     }
   }
 
+  /** Reflete a campanha escolhida no formulário sobre a arquitetura number_campaign_links. */
+  applyCampaignSelection(numberId, campaignId, role) {
+    const activeLink = this.campaignsService.activeLinkFor(numberId);
+    if (!campaignId) { if (activeLink) this.campaignsService.unassign(numberId); return; }
+    if (activeLink && activeLink.campaignId === campaignId && activeLink.role === role) return;
+    this.campaignsService.assign(numberId, campaignId, role);
+  }
+
   async archive(id) {
     const number = this.service.getNumber(id);
     if (!number || !window.confirm(`Arquivar ${number.phone}? O número ficará inativo e indisponível.`)) return;
@@ -133,6 +125,18 @@ export class NumbersController {
     try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     this.render();
     showToast('Número arquivado e retirado da operação.', 'warning');
+  }
+
+  async hardDelete(id, fromDetail = false) {
+    const number = this.service.getNumber(id);
+    if (!number) return;
+    if (!(await confirmHardDelete(this.content, { entity: "numbers", state: this.service.state, id, name: number.phone, typeLabel: "número" }))) return;
+    try {
+      await this.service.hardDelete(id);
+      await this.service.flush();
+      showToast("Número excluído definitivamente.", "warning");
+      if (fromDetail) window.location.hash = "#numbers"; else this.render();
+    } catch (error) { showToast(error.message, "error"); }
   }
 
   async markUnderReview(id, returnToDetail = false) {

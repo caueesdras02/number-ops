@@ -10,6 +10,7 @@ export class AppRepository {
     for (const key of ["numbers", "clients", "groups", "responsibles", "locations", "incidents", "historyEvents", "campaigns", "numberCampaignLinks"]) if (!Array.isArray(state[key])) state[key] = [];
     state.numbers = state.numbers.map((number) => ({ groupCount: 0, clientIds: [], groupIds: [], restriction: null, ...number }));
     state.clients = state.clients.map((client) => ({ squadId: null, ...client }));
+    state.responsibles = state.responsibles.map((responsible) => ({ squadId: null, ...responsible }));
     state.schemaVersion = SCHEMA_VERSION;
     return state;
   }

@@ -3,7 +3,7 @@ import { createId, now } from "./helpers.js";
 function createNamedEntity(prefix, { name, isActive = true } = {}) { const timestamp = now(); return { id: createId(prefix), name: String(name ?? "").trim(), isActive, createdAt: timestamp, updatedAt: timestamp }; }
 export const createClient = (data) => ({ ...createNamedEntity("client", data), squadId: data.squadId || null });
 export const createGroup = (data) => createNamedEntity("group", data);
-export function createResponsible({ name, team = "", isActive = true } = {}) { return { ...createNamedEntity("responsible", { name, isActive }), team: String(team ?? "").trim() }; }
+export function createResponsible({ name, team = "", squadId = null, isActive = true } = {}) { return { ...createNamedEntity("responsible", { name, isActive }), team: String(team ?? "").trim(), squadId: squadId || null }; }
 export const createLocation = (data) => createNamedEntity("location", data);
 export function createCampaign({ name, clientId = null, squadId = null, responsibleId = null, notes = "", status = "ACTIVE" } = {}) { const timestamp = now(); return { id: createId("campaign"), name: String(name ?? "").trim(), clientId: clientId || null, squadId: squadId || null, responsibleId: responsibleId || null, notes: String(notes ?? "").trim(), status, startedAt: timestamp, endedAt: null, createdAt: timestamp, updatedAt: timestamp }; }
 export function createNumberCampaignLink({ numberId, campaignId, role } = {}) { const timestamp = now(); return { id: createId("campaign-link"), numberId, campaignId, role, startedAt: timestamp, endedAt: null, createdAt: timestamp, updatedAt: timestamp }; }

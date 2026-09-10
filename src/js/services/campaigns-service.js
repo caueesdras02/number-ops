@@ -1,5 +1,6 @@
 import { createCampaign, createNumberCampaignLink } from "../models/entities.js";
 import { now } from "../models/helpers.js";
+import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete.js";
 
 export const CAMPAIGN_STATUSES = Object.freeze({ ACTIVE: "ACTIVE", CLOSED: "CLOSED" });
 export const CAMPAIGN_ROLES = Object.freeze({ PRIMARY: "PRIMARY", BACKUP: "BACKUP", SUPPORT: "SUPPORT" });
@@ -17,6 +18,17 @@ export class CampaignsService {
   linksFor(numberId) { return this.state.numberCampaignLinks.filter((link) => link.numberId === numberId).sort((a,b) => b.startedAt.localeCompare(a.startedAt)); }
   assign(numberId, campaignId, role) { const campaign = this.get(campaignId); if (!campaign || campaign.status !== CAMPAIGN_STATUSES.ACTIVE) throw new Error("Selecione uma campanha ativa."); if (!Object.values(CAMPAIGN_ROLES).includes(role)) throw new Error("Selecione o papel do número na campanha."); const previous = this.activeLinkFor(numberId);if(previous?.campaignId===campaignId&&previous?.role===role)return previous; if (previous) { previous.endedAt = now(); previous.updatedAt = previous.endedAt; this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: previous.campaignId, newValue: null }); } const link = createNumberCampaignLink({ numberId, campaignId, role }); this.state.numberCampaignLinks.push(link); this.persist(); this.numbers.record(numberId, "CAMPAIGN_JOINED", "Número entrou em campanha.", { previousValue: previous?.campaignId ?? null, newValue: { campaignId, role } }); return link; }
   unassign(numberId) { const link = this.activeLinkFor(numberId); if (!link) return null; link.endedAt = now(); link.updatedAt = link.endedAt; this.persist(); this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: link.campaignId, newValue: null }); return link; }
+  async hardDelete(id) {
+    const existing = this.get(id);
+    if (!existing) throw new Error("Campanha não encontrada.");
+    assertHardDeletable(this.state, "campaigns", id);
+    const port = this.numbers.hardDeletePort;
+    if (port?.campaigns) await port.campaigns.remove(id);
+    applyLocalHardDelete(this.state, "campaigns", id);
+    this.persist();
+    return existing;
+  }
+
   persist() { this.numbers.persist(); }
   flush() { return this.numbers.flush(); }
   validate(input) { if (!String(input.name ?? "").trim()) throw new Error("Informe o nome da campanha."); if (!input.squadId || !input.clientId) throw new Error("Selecione Squad e Cliente."); if (!input.responsibleId) throw new Error("Selecione o responsável pela campanha."); const client = this.state.clients.find((item) => item.id === input.clientId); if (!client || (client.squadId && client.squadId !== input.squadId)) throw new Error("O Cliente deve pertencer ao Squad selecionado."); }
