@@ -1,17 +1,20 @@
 import { NUMBER_STATUSES } from "../config/constants.js";
 import { createSeedState } from "../data/seed-data.js";
-import { createNumber } from "../models/number.js";
+import { createNumber, getUtilization, UTILIZATION } from "../models/number.js";
 import { normalizePhone, now } from "../models/helpers.js";
+import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete.js";
 import { HistoryService } from "./history-service.js";
 
 export class NumbersService {
-  constructor(repository) {
+  constructor(repository, { hardDeletePort = null } = {}) {
     this.repository = repository;
+    this.hardDeletePort = hardDeletePort;
     this.state = repository.initialize();
     this.state.campaigns ??= [];
     this.state.numberCampaignLinks ??= [];
     this.state.numbers = (this.state.numbers ?? []).map((number) => ({ ...number, groupCount: number.groupCount ?? 0 }));
     this.state.clients = (this.state.clients ?? []).map((client) => ({ ...client, squadId: client.squadId ?? null }));
+    this.state.responsibles = (this.state.responsibles ?? []).map((responsible) => ({ ...responsible, squadId: responsible.squadId ?? null }));
     this.history = new HistoryService(this);
     this.initializeSeed();
   }
@@ -24,6 +27,17 @@ export class NumbersService {
     }
   }
 
+  hasActiveCampaignLink(numberId) {
+    return this.state.numberCampaignLinks.some((link) => link.numberId === numberId && !link.endedAt);
+  }
+
+  /** Utilização derivada: EM USO (vínculo ativo) / DISPONÍVEL (apto e livre) / INDISPONÍVEL. */
+  utilizationOf(numberOrId) {
+    const number = typeof numberOrId === "string" ? this.getNumber(numberOrId) : numberOrId;
+    if (!number) return UTILIZATION.UNAVAILABLE;
+    return getUtilization(number, this.hasActiveCampaignLink(number.id));
+  }
+
   getNumbers(query = "", filters = {}) {
     const normalizedQuery = normalizePhone(query);
     return this.state.numbers.filter((number) => {
@@ -32,8 +46,8 @@ export class NumbersService {
       const archiveFilter = filters.archiveFilter ?? "ALL";
       const matchesArchive = archiveFilter === "ARCHIVED" ? Boolean(number.archivedAt) : archiveFilter === "ACTIVE" ? !number.archivedAt : true;
       const matchesCampaign=!filters.campaignId||activeCampaignLink?.campaignId===filters.campaignId;
-      const matchesCampaignState=!filters.campaignState||(filters.campaignState==="IN_CAMPAIGN"?Boolean(activeCampaignLink):!activeCampaignLink);
-      return matchesQuery && matchesArchive && matchesCampaign && matchesCampaignState && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
+      const matchesUtilization=!filters.utilization||this.utilizationOf(number)===filters.utilization;
+      return matchesQuery && matchesArchive && matchesCampaign && matchesUtilization && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
     });
   }
 
@@ -71,14 +85,14 @@ export class NumbersService {
     const updated = {
       ...existing,
       phone,
-      identification: input.identification.trim(),
+      identification: (input.identification ?? existing.identification ?? "").trim(),
       status: input.status ?? existing.status,
       locationId: input.locationId || null,
       responsibleId: input.responsibleId || null,
       clientIds: input.clientIds ?? existing.clientIds ?? [],
       groupIds: input.groupIds ?? existing.groupIds ?? [],
       groupCount,
-      notes: input.notes.trim(),
+      notes: (input.notes ?? existing.notes ?? "").trim(),
       updatedAt: now(),
     };
     this.state.numbers = this.state.numbers.map((number) => number.id === id ? updated : number);
@@ -139,6 +153,17 @@ export class NumbersService {
     this.persist();
     this.record(id, "NUMBER_RESTRICTION_REMOVED", "Restrição operacional removida.", { previousValue: existing.restriction, newValue: null });
     return updated;
+  }
+
+  /** Exclusão definitiva (MASTER). Bloqueia se houver referências; remove no banco antes do estado local. */
+  async hardDelete(id) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    assertHardDeletable(this.state, "numbers", id);
+    if (this.hardDeletePort?.numbers) await this.hardDeletePort.numbers.remove(id);
+    applyLocalHardDelete(this.state, "numbers", id);
+    this.persist();
+    return existing;
   }
 
   persist() { return this.repository.save(this.state); }

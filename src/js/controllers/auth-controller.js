@@ -1,5 +1,6 @@
 import { renderForgotPassword, renderLogin, renderRegistration, renderResetPassword } from "../ui/auth-view.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
+import { bindThemeToggles } from "../ui/theme-toggle.js";
 
 export class AuthController {
   constructor({ service, root }) { this.service = service; this.root = root; this.mode = "login"; this.message = ""; this.forgotSent = false; }
@@ -18,6 +19,7 @@ export class AuthController {
     this.root.querySelector('[data-auth-form="forgot"]')?.addEventListener("submit", (event) => this.forgotPassword(event));
     this.root.querySelector('[data-auth-form="reset"]')?.addEventListener("submit", (event) => this.updatePassword(event));
     this.bindPasswordToggles();
+    bindThemeToggles(this.root);
   }
 
   bindPasswordToggles() {

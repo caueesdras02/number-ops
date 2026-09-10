@@ -28,6 +28,11 @@ import { ProfilesController } from "./controllers/profiles-controller.js";
 import { AuditLogService } from "./services/audit-log-service.js";
 import { AuditLogController } from "./controllers/audit-log-controller.js";
 import { AboutController } from "./controllers/about-controller.js";
+import { ACCESS_LEVEL_LABELS } from "./models/access.js";
+import { initTheme, bindThemeToggles } from "./ui/theme-toggle.js";
+
+initTheme();
+bindThemeToggles();
 
 const content=document.querySelector("#page-content");
 const title=document.querySelector("#page-title");
@@ -43,8 +48,8 @@ let auditLogController=null;
 let internalRoutesEnabled=false;
 new AboutController({trigger:document.querySelector("[data-about-open]")}).bind();
 
-function createOperationalControllers(repository,{runLegacyMaintenance=false}={}) {
-  const numbersService=new NumbersService(repository);
+function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null}={}) {
+  const numbersService=new NumbersService(repository,{hardDeletePort});
   if(runLegacyMaintenance) {
     const migration=new ApprovedSpreadsheetMigrationService(numbersService).run();
     const cleanup=new TestDataCleanupService(numbersService).run();
@@ -80,11 +85,14 @@ function showView(viewName) {
   else if(view==="history")controllers.history.render();
   else if(view==="guide")controllers.guide.render();
   else if(view==="backup")controllers.backup.render();
-  else content.innerHTML=renderView(view);
+  else if(views_has(view))content.innerHTML=renderView(view);
+  else {window.location.hash="#dashboard";return;}
   title.textContent=getViewTitle(view);
   navigationLinks.forEach((link)=>link.classList.toggle("is-active",link.dataset.view===view));
   setMobileNavigation(false);
 }
+
+function views_has(view){return ["clients","groups","responsibles","locations","numbers","campaigns","incidents","history","guide","backup","dashboard","profiles","activity"].includes(view);}
 
 function currentView(){return window.location.hash.slice(1)||"dashboard";}
 function setMobileNavigation(open){appShell.classList.toggle("is-nav-open",open);menuToggle.setAttribute("aria-expanded",String(open));menuToggle.setAttribute("aria-label",open?"Fechar menu":"Abrir menu");}
@@ -106,32 +114,36 @@ async function bootstrap() {
     internalRoutesEnabled=true;
     showView(currentView());
     updateStickyHeader();
+    bindThemeToggles();
     return;
   }
   const repositories=createSupabaseRepositories(supabase);
   const authService=new AuthService(new SupabaseAuthRepository(supabase));
   const authController=new AuthController({service:authService,root:appShell});
-  if(isPasswordRecovery) { authController.mode="reset"; await authController.render(); return; }
+  if(isPasswordRecovery) { authController.mode="reset"; await authController.render(); bindThemeToggles(); return; }
   let authenticated=null;
-  try{authenticated=await authService.getActiveSession();}catch{await authController.render();return;}
-  if(!authenticated){await authController.render();return;}
+  try{authenticated=await authService.getActiveSession();}catch{await authController.render();bindThemeToggles();return;}
+  if(!authenticated){await authController.render();bindThemeToggles();return;}
   appShell.classList.remove("is-auth-screen");
   appShell.dataset.accessLevel=authenticated.profile.access_level;
   content.innerHTML='<section class="directory-empty"><div><h2>Carregando dados compartilhados…</h2><p>Sincronizando com o Supabase.</p></div></section>';
   const remoteRepository=await SupabaseStateRepository.create(supabase);
-  controllers=createOperationalControllers(remoteRepository);
+  const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
+  controllers=createOperationalControllers(remoteRepository,{hardDeletePort});
   profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),content,currentProfile:authenticated.profile});
-  if(authenticated.profile.access_level==="ADMIN") auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
-  document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=authenticated.profile.access_level!=="ADMIN";});
+  if(authenticated.profile.access_level==="ADMIN"||authenticated.profile.access_level==="MASTER") auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
+  document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!(authenticated.profile.access_level==="ADMIN"||authenticated.profile.access_level==="MASTER");});
+  document.querySelectorAll("[data-master-only]").forEach((item)=>{item.hidden=authenticated.profile.access_level!=="MASTER";});
   const profileLabel=document.createElement("span");
   profileLabel.dataset.profileLabel="";
   profileLabel.className="environment-label";
-  profileLabel.textContent=authenticated.profile.name;
+  profileLabel.textContent=`${authenticated.profile.name} · ${ACCESS_LEVEL_LABELS[authenticated.profile.access_level]??authenticated.profile.access_level}`;
   logoutButton.before(profileLabel);
   authController.bindLogout(logoutButton);
   internalRoutesEnabled=true;
   showView(currentView());
   updateStickyHeader();
+  bindThemeToggles();
   authService.onAuthStateChange((event)=>{if(event==="SIGNED_OUT")window.location.reload();});
 }
 

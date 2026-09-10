@@ -46,14 +46,26 @@ assert.ok(createSupabaseRepositories(client).campaigns instanceof SupabaseReposi
 assert.deepEqual(await createSupabaseRepositories(client).numbers.get("n1"), { id: "n1" });
 
 let savedProfile = null;
+const profileRoster = [
+  { id: "master-1", name: "Cauê", email: "caue@example.com", access_level: "MASTER", status: "ACTIVE", job_title: "ANALYST", squad_id: null },
+  { id: "user-2", name: "Pessoa", email: "pessoa@example.com", access_level: "USER", status: "ACTIVE", job_title: "ANALYST", squad_id: "s1" },
+];
 const profiles = new ProfilesService(
-  { list: async () => [{ id: "user-2", name: "Pessoa", email: "pessoa@example.com" }], update: async (id, value) => { savedProfile = { id, ...value }; return savedProfile; } },
+  { list: async () => profileRoster.map((p) => ({ ...p })), update: async (id, value) => { savedProfile = { id, ...value }; return savedProfile; } },
   { list: async () => [{ id: "s1", name: "Squad 1" }] },
 );
-await profiles.update("user-2", { name: "Pessoa", job_title: "ANALYST", squad_id: "s1", status: "ACTIVE", access_level: "VIEWER" }, { id: "user-1", access_level: "ADMIN" });
-assert.equal(savedProfile.access_level, "VIEWER");
-await assert.rejects(() => profiles.update("user-1", { name: "Admin", job_title: "ANALYST", squad_id: "", status: "INACTIVE", access_level: "ADMIN" }, { id: "user-1", access_level: "ADMIN" }), /não pode desativar/);
-await assert.rejects(() => profiles.update("user-2", { name: "Pessoa", job_title: "ANALYST", status: "ACTIVE", access_level: "ADMIN" }, { id: "viewer", access_level: "VIEWER" }), /Somente administradores/);
+// ADMIN pode editar dados, mas NÃO o nível de acesso
+await profiles.update("user-2", { name: "Pessoa Nova", job_title: "ANALYST", squad_id: "s1", status: "ACTIVE" }, { id: "admin-1", access_level: "ADMIN" });
+assert.equal(savedProfile.name, "Pessoa Nova");
+assert.equal(savedProfile.access_level, "USER");
+await assert.rejects(() => profiles.update("user-2", { name: "Pessoa", job_title: "ANALYST", squad_id: "s1", status: "ACTIVE", access_level: "VIEWER" }, { id: "admin-1", access_level: "ADMIN" }), /Somente MASTER/);
+// MASTER promove/rebaixa
+await profiles.update("user-2", { name: "Pessoa", job_title: "ANALYST", squad_id: "s1", status: "ACTIVE", access_level: "ADMIN" }, { id: "master-1", access_level: "MASTER" });
+assert.equal(savedProfile.access_level, "ADMIN");
+// último MASTER protegido
+await assert.rejects(() => profiles.update("master-1", { name: "Cauê", job_title: "ANALYST", squad_id: "", status: "ACTIVE", access_level: "ADMIN" }, { id: "master-1", access_level: "MASTER" }), /próprio acesso|MASTER ativo/);
+// VIEWER não altera nada
+await assert.rejects(() => profiles.update("user-2", { name: "Pessoa", job_title: "ANALYST", status: "ACTIVE" }, { id: "viewer", access_level: "VIEWER" }), /Somente administradores/);
 
 const sql = await readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8");
 for (const table of ["profiles", "numbers", "clients", "squads", "campaigns", "number_campaign_links", "responsibles", "locations", "incidents", "restrictions", "history_events", "audit_logs"]) {

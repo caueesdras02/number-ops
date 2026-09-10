@@ -1,6 +1,7 @@
 import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns } from "../ui/campaigns-view.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
+import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
 export class CampaignsController {
   constructor({ service, content }) { this.service=service; this.content=content; this.filters={query:"",status:""}; }
   render() {
@@ -11,6 +12,7 @@ export class CampaignsController {
     this.content.querySelector('[data-action="status"]')?.addEventListener("change",(event)=>{this.filters.status=event.target.value;this.render();});
     this.content.querySelectorAll('[data-action="view"]').forEach((button)=>button.addEventListener("click",()=>this.detail(button.dataset.id)));
     this.content.querySelectorAll('[data-action="edit"]').forEach((button)=>button.addEventListener("click",()=>this.openForm(button.dataset.id)));
+    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button)=>button.addEventListener("click",()=>this.hardDelete(button.dataset.id)));
     this.content.querySelectorAll('[data-action="close"]').forEach((button)=>button.addEventListener("click",async()=>{
       if(!confirm("Encerrar esta campanha?"))return;
       try{this.service.close(button.dataset.id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
@@ -22,9 +24,10 @@ export class CampaignsController {
   }
   detail(id) {
     const item=this.service.get(id);if(!item)return this.render();const state=this.service.state;
-    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||""))});
+    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||""))});
     this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{window.location.hash="#campaigns";});
     this.content.querySelector('[data-action="add-links"]')?.addEventListener("click",()=>this.openLinkForm(id));
+    this.content.querySelector('[data-action="hard-delete"]')?.addEventListener("click",()=>this.hardDelete(id,true));
     this.content.querySelector('[data-action="close"]')?.addEventListener("click",async()=>{
       if(!confirm("Encerrar esta campanha?"))return;
       try{this.service.close(id);await this.service.flush();showToast("Campanha encerrada.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
@@ -38,17 +41,41 @@ export class CampaignsController {
       try{this.service.unassign(button.dataset.numberId);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
     }));
   }
+  async hardDelete(id,fromDetail=false) {
+    const campaign=this.service.get(id);
+    if(!campaign)return;
+    if(!(await confirmHardDelete(this.content,{entity:"campaigns",state:this.service.state,id,name:campaign.name,typeLabel:"campanha"})))return;
+    try{
+      await this.service.hardDelete(id);
+      await this.service.flush();
+      showToast("Campanha excluída definitivamente.","warning");
+      if(fromDetail)window.location.hash="#campaigns";else this.render();
+    }catch(error){showToast(error.message,"error");}
+  }
   openForm(id=null) {
     const state=this.service.state;
     this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive)}));
     const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
-    const form=this.content.querySelector("#campaign-form"),squadSelect=form?.elements.squadId,clientSelect=form?.elements.clientId;
-    const refreshClients=()=>{if(!clientSelect)return;const current=clientSelect.value;clientSelect.replaceChildren(new Option("Selecione",""));state.clients.filter((item)=>item.isActive&&(!squadSelect.value||!item.squadId||item.squadId===squadSelect.value)).forEach((item)=>clientSelect.append(new Option(`${item.name}${item.squadId?"":" · Sem Squad"}`,item.id,false,item.id===current)));};
-    squadSelect?.addEventListener("change",refreshClients);refreshClients();
+    const form=this.content.querySelector("#campaign-form");
+    const squadSelect=form?.elements.squadId,clientSelect=form?.elements.clientId,squadHint=form?.querySelector("[data-squad-hint]");
+    // Cliente -> Squad: selecionar o cliente deriva e trava o Squad da campanha.
+    const syncSquadFromClient=()=>{
+      if(!clientSelect||!squadSelect)return;
+      const squadId=clientSelect.selectedOptions[0]?.dataset.squad||"";
+      if(squadId){squadSelect.value=squadId;squadSelect.disabled=true;if(squadHint)squadHint.textContent="Squad definido pelo Cliente selecionado.";}
+      else{squadSelect.disabled=false;if(squadHint)squadHint.textContent="Este cliente não tem Squad — selecione um Squad para a campanha.";}
+    };
+    clientSelect?.addEventListener("change",syncSquadFromClient);
+    if(clientSelect?.value)syncSquadFromClient();
     form?.addEventListener("submit",(event)=>guardedSubmit(form,event,async()=>{
-      try{const values=Object.fromEntries(new FormData(form));id?this.service.update(id,values):this.service.create(values);await this.service.flush();close();showToast(id?"Campanha atualizada.":"Campanha criada.","success");this.render();}
-      catch(error){showToast(error.message,"error");}
+      try{
+        if(squadSelect)squadSelect.disabled=false; // garante que entra no FormData
+        const values=Object.fromEntries(new FormData(form));
+        id?this.service.update(id,values):this.service.create(values);
+        await this.service.flush();close();showToast(id?"Campanha atualizada.":"Campanha criada.","success");this.render();
+      }
+      catch(error){if(squadSelect&&clientSelect?.selectedOptions[0]?.dataset.squad)squadSelect.disabled=true;showToast(error.message,"error");}
     }));
   }
   openLinkForm(campaignId) {

@@ -1,30 +1,40 @@
-import { renderDirectory, renderDirectoryDetail, renderDirectoryForm } from "../ui/directory-view.js";
+import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDirectoryForm, renderResponsibleDetail } from "../ui/directory-view.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
+import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
 
 const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador", locations: "Localização" };
+const typeLabels = { clients: "cliente", groups: "squad", responsibles: "colaborador", locations: "localização" };
 
 export class DirectoryController {
   constructor({ service, campaignsService = null, content, type }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.type = type; this.query = ""; }
 
+  get state() { return this.service.numbersService.state; }
+
   render() {
-    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query, this.service.numbersService.state.groups);
+    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query, this.state.groups);
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
+    this.content.querySelector('[data-action="bulk-squad"]')?.addEventListener("click", () => this.openBulkSquad());
     this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.render(); });
     this.content.querySelector('[data-action="clear-search"]')?.addEventListener("click", () => { this.query = ""; this.render(); });
     this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.detail(button.dataset.id)));
     this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
+    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id)));
     this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", async () => { try { this.service.restore(this.type, button.dataset.id); await this.service.flush(); showToast(`${labels[this.type]} restaurado.`, "success"); this.render(); } catch(error) { showToast(error.message,"error"); } }));
   }
 
   detail(id) {
     const item = this.service.get(this.type, id);
     if (!item) return this.render();
-    const numbers = this.service.numbersService.getNumbersFor(this.type, id);
-    const state = this.service.numbersService.state;
-    const campaigns = this.type === "clients" && this.campaignsService ? this.campaignsService.list({ clientId: id }) : [];
-    this.content.innerHTML = renderDirectoryDetail(this.type, item, numbers, state.locations, state.responsibles, campaigns, state.groups, state.numberCampaignLinks);
+    const state = this.state;
+    if (this.type === "responsibles") {
+      this.content.innerHTML = renderResponsibleDetail(item, state.groups, state.clients, state.campaigns, state.numbers, state.locations);
+    } else {
+      const numbers = this.service.numbersService.getNumbersFor(this.type, id);
+      const campaigns = this.type === "clients" && this.campaignsService ? this.campaignsService.list({ clientId: id }) : [];
+      this.content.innerHTML = renderDirectoryDetail(this.type, item, numbers, state.locations, state.responsibles, campaigns, state.groups, state.numberCampaignLinks);
+    }
     this.content.querySelector('[data-action="back"]')?.addEventListener("click", () => this.render());
     this.content.querySelectorAll('[data-action="open-number"]').forEach((button) => button.addEventListener("click", () => { window.location.hash = `#numbers/${button.dataset.id}`; }));
     this.content.querySelectorAll('[data-action="open-campaign"]').forEach((button) => button.addEventListener("click", () => { window.location.hash = `#campaigns/${button.dataset.id}`; }));
@@ -46,6 +56,19 @@ export class DirectoryController {
     this.render();
   }
 
+  async hardDelete(id) {
+    const item = this.service.get(this.type, id);
+    if (!item) return;
+    const entity = this.type === "groups" ? "groups" : this.type;
+    if (!(await confirmHardDelete(this.content, { entity, state: this.state, id, name: item.name, typeLabel: typeLabels[this.type] }))) return;
+    try {
+      await this.service.hardDelete(this.type, id);
+      await this.service.flush();
+      showToast(`${labels[this.type]} excluído definitivamente.`, "warning");
+      this.render();
+    } catch (error) { showToast(error.message, "error"); }
+  }
+
   openForm(id = null) {
     this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}, this.service.list("groups")));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
@@ -60,6 +83,27 @@ export class DirectoryController {
         showToast(`${labels[this.type]} ${isUpdate ? "atualizado" : "adicionado"}.`, "success");
         this.render();
       } catch (error) { showToast(error.message || "Não foi possível salvar o registro.", "error"); }
+    }));
+  }
+
+  openBulkSquad() {
+    const squadless = this.service.list("clients", true).filter((client) => client.isActive && !client.squadId);
+    if (!squadless.length) { showToast("Nenhum cliente sem Squad.", "info"); return; }
+    this.content.insertAdjacentHTML("beforeend", renderBulkSquadForm(squadless, this.service.list("groups")));
+    const close = () => this.content.querySelector(".modal-backdrop")?.remove();
+    this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", close));
+    const form = this.content.querySelector("#bulk-squad-form");
+    form?.addEventListener("submit", (event) => guardedSubmit(form, event, async () => {
+      try {
+        const data = new FormData(form);
+        const squadId = data.get("squadId");
+        if (!squadId) throw new Error("Selecione o Squad.");
+        const updated = this.service.bulkAssignSquad(data.getAll("clientIds"), squadId);
+        await this.service.flush();
+        close();
+        showToast(`${updated} cliente(s) atualizados.`, "success");
+        this.render();
+      } catch (error) { showToast(error.message, "error"); }
     }));
   }
 }
