@@ -1,3 +1,5 @@
+import { isAdminOrAbove } from "../models/access.js";
+
 const ACTION_LABELS = Object.freeze({
   NUMBER_CREATED: "Número criado",
   NUMBER_UPDATED: "Número editado",
@@ -30,6 +32,7 @@ const ACTION_LABELS = Object.freeze({
   SQUAD_UPDATED: "Squad editado",
   LOCATION_CREATED: "Localização criada",
   LOCATION_UPDATED: "Localização editada",
+  LOCATION_RESPONSIBLE_CHANGED: "Colaborador da localização alterado",
   RESPONSIBLE_CREATED: "Colaborador criado",
   RESPONSIBLE_UPDATED: "Colaborador editado",
   RESPONSIBLE_TEAM_CHANGED: "Squad do colaborador alterado",
@@ -69,7 +72,7 @@ export class AuditLogService {
   }
 
   async load() {
-    if(this.currentProfile.access_level!=="ADMIN") throw new Error("Somente administradores podem consultar o Registro de atividades.");
+    if(!isAdminOrAbove(this.currentProfile)) throw new Error("Somente administradores ou MASTER podem consultar o Registro de atividades.");
     const [rows,profiles,squads]=await Promise.all([this.repository.list(),this.profilesRepository.list(),this.squadsRepository.list()]);
     const logs=rows.map(mapRow).map((log)=>this.enrich(log,profiles,squads)).sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
     return { logs,profiles:profiles.sort((a,b)=>a.name.localeCompare(b.name,"pt-BR")),squads:squads.filter((item)=>item.is_active).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR")) };

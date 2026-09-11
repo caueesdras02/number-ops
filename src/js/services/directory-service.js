@@ -19,6 +19,7 @@ export class DirectoryService {
       name,
       ...(type === "responsibles" ? { team: String(input.team ?? item.team ?? "").trim(), squadId: input.squadId || null } : {}),
       ...(type === "clients" ? { squadId: input.squadId || null } : {}),
+      ...(type === "locations" ? { responsibleId: input.responsibleId || null } : {}),
       updatedAt: now(),
     });
     this.numbersService.persist();

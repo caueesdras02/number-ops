@@ -61,7 +61,7 @@ assert.equal(legacyService.state.clients[0].squadId,null);
 
 const index=await readFile(new URL("../index.html",import.meta.url),"utf8");
 assert.equal((index.match(/data-view="activity"/g)||[]).length,1);
-assert.match(index,/<link rel="icon"[^>]*href="\.\/src\/assets\/favicon\.svg"/);
+assert.match(index,/<link rel="icon"[^>]*href="\.\/src\/assets\/fivecon-no\.png"/);
 assert.match(index,/class="brand-logo" src="\.\/src\/assets\/number-ops\.png"/);
 assert.match(index,/data-about-open/);
 assert.match(index,/data-theme-toggle/);

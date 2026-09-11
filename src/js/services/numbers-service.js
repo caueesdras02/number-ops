@@ -15,6 +15,7 @@ export class NumbersService {
     this.state.numbers = (this.state.numbers ?? []).map((number) => ({ ...number, groupCount: number.groupCount ?? 0 }));
     this.state.clients = (this.state.clients ?? []).map((client) => ({ ...client, squadId: client.squadId ?? null }));
     this.state.responsibles = (this.state.responsibles ?? []).map((responsible) => ({ ...responsible, squadId: responsible.squadId ?? null }));
+    this.state.locations = (this.state.locations ?? []).map((location) => ({ ...location, responsibleId: location.responsibleId ?? null }));
     this.history = new HistoryService(this);
     this.initializeSeed();
   }
