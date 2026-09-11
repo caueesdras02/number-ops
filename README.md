@@ -34,7 +34,7 @@ Produção: https://caueesdras02.github.io/number-ops/
 O Audit Log é gerado no banco por triggers autenticadas e consultado por administradores/master em modo somente leitura.
 
 Para uma instalação nova, execute as migrations de `supabase/` **nesta ordem**:
-`schema.sql` → `002_operational_policies.sql` → `003_audit_log.sql` → `004_campaign_responsible_and_reactivation.sql` → `005_seed_missing_clients.sql` → `007_audit_locations_responsibles.sql` → `008_master_access_level.sql` → `009_master_permissions_and_cleanup.sql`.
+`schema.sql` → `002_operational_policies.sql` → `003_audit_log.sql` → `004_campaign_responsible_and_reactivation.sql` → `005_seed_missing_clients.sql` → `007_audit_locations_responsibles.sql` → `008_master_access_level.sql` → `009_master_permissions_and_cleanup.sql` → `010_location_responsible.sql`.
 
 `008` adiciona o valor de enum `MASTER` e **deve ser aplicada isolada** (um novo valor de enum não pode ser usado na mesma transação em que é criado); só então aplique `009`, que cria as políticas/trigger do MASTER, adiciona `responsibles.squad_id`, promove o MASTER inicial e remove o usuário de teste.
 

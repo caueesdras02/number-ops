@@ -123,6 +123,20 @@
 :root[data-theme="dark"] .dash-empty { background: var(--color-surface-muted); border-color: var(--color-border-strong); }
 :root[data-theme="dark"] .dash-empty > span { color: #7ff0a6; background: #123528; }
 :root[data-theme="dark"] .metric-inuse { --metric-ink: #86ccf0; --metric-soft: #10303f; }
+:root[data-theme="dark"] .metric-total { --metric-ink: #c9d6cf; --metric-soft: #1b2622; }
+:root[data-theme="dark"] .metric-available { --metric-ink: #7ff0a6; --metric-soft: #123528; }
+:root[data-theme="dark"] .metric-warming { --metric-ink: #f0cf7e; --metric-soft: #37300f; }
+:root[data-theme="dark"] .metric-review { --metric-ink: #f0c79b; --metric-soft: #33260f; }
+:root[data-theme="dark"] .metric-blocked { --metric-ink: #ff9d9d; --metric-soft: #3a1d1d; }
+:root[data-theme="dark"] .metric-incidents { --metric-ink: #ffb4b4; --metric-soft: #341c1c; }
+:root[data-theme="dark"] .dash-status-active { --status-ink: #7ff0a6; --status-soft: #123528; }
+:root[data-theme="dark"] .dash-status-warming { --status-ink: #f0cf7e; --status-soft: #37300f; }
+:root[data-theme="dark"] .dash-status-under_review { --status-ink: #f0c79b; --status-soft: #33260f; }
+:root[data-theme="dark"] .dash-status-blocked { --status-ink: #ff9d9d; --status-soft: #3a1d1d; }
+:root[data-theme="dark"] .dash-status-inactive { --status-ink: #a9bcb3; --status-soft: #223029; }
+:root[data-theme="dark"] .attention-blocked { --attention-ink: #ff9d9d; --attention-soft: #3a1d1d; }
+:root[data-theme="dark"] .attention-review { --attention-ink: #f0c79b; --attention-soft: #33260f; }
+:root[data-theme="dark"] .attention-incidents { --attention-ink: #ffb4b4; --attention-soft: #341c1c; }
 
 :root[data-theme="dark"] .auth-brand-panel { background: linear-gradient(160deg, #0f2c24, #08201a); }
 :root[data-theme="dark"] .toast { background: var(--color-surface); }

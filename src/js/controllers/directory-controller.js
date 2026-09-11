@@ -12,7 +12,7 @@ export class DirectoryController {
   get state() { return this.service.numbersService.state; }
 
   render() {
-    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query, this.state.groups);
+    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query, this.state.groups, this.state.responsibles);
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
     this.content.querySelector('[data-action="bulk-squad"]')?.addEventListener("click", () => this.openBulkSquad());
     this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.render(); });
@@ -70,7 +70,7 @@ export class DirectoryController {
   }
 
   openForm(id = null) {
-    this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}, this.service.list("groups")));
+    this.content.insertAdjacentHTML("beforeend", renderDirectoryForm(this.type, id ? this.service.get(this.type, id) : {}, this.service.list("groups"), this.service.list("responsibles")));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", close));
     const directoryForm = this.content.querySelector("#directory-form");

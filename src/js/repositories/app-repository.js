@@ -11,6 +11,7 @@ export class AppRepository {
     state.numbers = state.numbers.map((number) => ({ groupCount: 0, clientIds: [], groupIds: [], restriction: null, ...number }));
     state.clients = state.clients.map((client) => ({ squadId: null, ...client }));
     state.responsibles = state.responsibles.map((responsible) => ({ squadId: null, ...responsible }));
+    state.locations = state.locations.map((location) => ({ responsibleId: null, ...location }));
     state.schemaVersion = SCHEMA_VERSION;
     return state;
   }
