@@ -1,4 +1,4 @@
-import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDirectoryForm, renderResponsibleDetail } from "../ui/directory-view.js";
+import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDirectoryForm, renderGroupDetail, renderResponsibleDetail } from "../ui/directory-view.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
@@ -30,6 +30,9 @@ export class DirectoryController {
     const state = this.state;
     if (this.type === "responsibles") {
       this.content.innerHTML = renderResponsibleDetail(item, state.groups, state.clients, state.campaigns, state.numbers, state.locations);
+    } else if (this.type === "groups") {
+      const numbers = this.service.numbersService.getNumbersFor(this.type, id);
+      this.content.innerHTML = renderGroupDetail(item, state.clients, state.responsibles, numbers, state.locations);
     } else {
       const numbers = this.service.numbersService.getNumbersFor(this.type, id);
       const campaigns = this.type === "clients" && this.campaignsService ? this.campaignsService.list({ clientId: id }) : [];
