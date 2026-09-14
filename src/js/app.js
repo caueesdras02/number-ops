@@ -57,6 +57,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     if(cleanup.removedNumbers?.length||cleanup.alreadyCompleted) console.info("Limpeza de dados de teste:",cleanup);
   }
   const campaignsService=new CampaignsService(numbersService);
+  campaignsService.reconcileClientSquadFromActiveLinks();
   const directoryService=new DirectoryService(numbersService);
   return {
     numbersService,

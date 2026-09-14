@@ -95,6 +95,23 @@ assert.equal(numbers.getNumber("n1").groupIds.filter((id) => id === "s1").length
 campaigns.unassign("n1", campaignA.id);
 campaigns.unassign("n1", campaignB.id);
 
+// 12b) RECONCILIAÇÃO: vínculo pré-existente criado ANTES de deriveClientAndSquad existir
+// (ex.: número já vinculado a duas campanhas de clientes diferentes, mas só um cliente foi
+// "puxado" — cenário real encontrado em produção). Simula o vínculo bruto direto no estado,
+// sem passar por assign(), como estava a base antes desta função existir.
+const numberWithoutDerivation = numbers.create({ phone: "5511999999994", groupCount: 0, clientIds: [], groupIds: [] });
+numbers.state.numberCampaignLinks.push({ id: "link_legacy_a", numberId: numberWithoutDerivation.id, campaignId: campaignA.id, role: "PRIMARY", startedAt: new Date().toISOString(), endedAt: null });
+numbers.state.numberCampaignLinks.push({ id: "link_legacy_b", numberId: numberWithoutDerivation.id, campaignId: campaignB.id, role: "SUPPORT", startedAt: new Date().toISOString(), endedAt: null });
+assert.deepEqual(numbers.getNumber(numberWithoutDerivation.id).clientIds, [], "antes da reconciliação, nenhum cliente foi derivado (vínculo criado fora do assign())");
+campaigns.reconcileClientSquadFromActiveLinks();
+assert.deepEqual(numbers.getNumber(numberWithoutDerivation.id).clientIds.sort(), ["c1", "c2"], "reconciliação deve derivar os clientes das DUAS campanhas vinculadas, não só a primeira");
+assert.deepEqual(numbers.getNumber(numberWithoutDerivation.id).groupIds.sort(), ["s1", "s2"]);
+campaigns.reconcileClientSquadFromActiveLinks(); // idempotente: rodar de novo não duplica nem falha
+assert.equal(numbers.getNumber(numberWithoutDerivation.id).clientIds.filter((id) => id === "c1").length, 1);
+campaigns.unassign(numberWithoutDerivation.id, campaignA.id);
+campaigns.unassign(numberWithoutDerivation.id, campaignB.id);
+numbers.archive(numberWithoutDerivation.id); // número auxiliar deste teste não deve poluir as contagens do dashboard abaixo
+
 // ---------------------------------------------------------------------------
 // DASHBOARD: um número em várias campanhas conta apenas UMA vez como "Em uso"
 // ---------------------------------------------------------------------------

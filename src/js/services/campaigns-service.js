@@ -57,6 +57,18 @@ export class CampaignsService {
     return existing;
   }
 
+  /**
+   * Corrige retroativamente números cujo cliente/squad da campanha nunca foi derivado
+   * (vínculos ativos criados antes desta derivação automática existir). Idempotente:
+   * só grava quando falta algo, nunca remove associações existentes.
+   */
+  reconcileClientSquadFromActiveLinks() {
+    this.state.numberCampaignLinks.filter((link) => !link.endedAt).forEach((link) => {
+      const campaign = this.get(link.campaignId);
+      if (campaign) this.numbers.deriveClientAndSquad(link.numberId, { clientId: campaign.clientId, squadId: campaign.squadId });
+    });
+  }
+
   persist() { this.numbers.persist(); }
   flush() { return this.numbers.flush(); }
   validate(input) { if (!String(input.name ?? "").trim()) throw new Error("Informe o nome da campanha."); if (!input.squadId || !input.clientId) throw new Error("Selecione Squad e Cliente."); if (!input.responsibleId) throw new Error("Selecione o responsável pela campanha."); const client = this.state.clients.find((item) => item.id === input.clientId); if (!client || (client.squadId && client.squadId !== input.squadId)) throw new Error("O Cliente deve pertencer ao Squad selecionado."); }
