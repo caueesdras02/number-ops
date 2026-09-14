@@ -1,5 +1,5 @@
 import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
-import { renderCampaignLinkForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
+import { renderCampaignAddForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
 import { showToast } from '../ui/toast.js';
 import { guardedSubmit } from '../ui/form-submit-guard.js';
 import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
@@ -55,7 +55,7 @@ export class NumbersController {
     this.content.querySelector('[data-action="register-restriction"]')?.addEventListener('click', () => this.openRestrictionForm(number.id));
     this.content.querySelector('[data-action="remove-restriction"]')?.addEventListener('click', () => this.removeRestriction(number.id));
     this.content.querySelector('[data-action="manage-campaign"]')?.addEventListener('click', () => this.openCampaignForm(number.id));
-    this.content.querySelector('[data-action="end-campaign-link"]')?.addEventListener('click', () => this.endCampaignLink(number.id));
+    this.content.querySelectorAll('[data-action="end-campaign-link"]').forEach((button) => button.addEventListener('click', () => this.endCampaignLink(number.id, button.dataset.campaignId)));
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener('click', () => this.hardDelete(number.id, true));
     this.content.querySelector('[data-action="restore"]')?.addEventListener('click', async () => { try { this.service.restore(number.id); await this.service.flush(); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); } catch(error) { showToast(error.message,"error"); } });
@@ -64,8 +64,7 @@ export class NumbersController {
 
   openForm(id = null, message = "") {
     const number = id ? this.service.getNumber(id) : null;
-    const activeLink = id ? this.campaignsService.activeLinkFor(id) : null;
-    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), campaigns: this.service.state.campaigns, activeLink, message }));
+    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message }));
     const form = this.content.querySelector("#number-form");
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
@@ -98,8 +97,7 @@ export class NumbersController {
     const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
     try {
       const editing = Boolean(form.dataset.id);
-      const record = editing ? this.service.update(form.dataset.id, values) : this.service.create(values);
-      this.applyCampaignSelection(record.id, values.campaignId || "", values.campaignRole || "PRIMARY");
+      editing ? this.service.update(form.dataset.id, values) : this.service.create(values);
       await this.service.flush();
       this.closeForm();
       this.render();
@@ -108,14 +106,6 @@ export class NumbersController {
       showToast(error.message, 'error');
       this.closeForm(); this.openForm(form.dataset.id || null, error.message);
     }
-  }
-
-  /** Reflete a campanha escolhida no formulário sobre a arquitetura number_campaign_links. */
-  applyCampaignSelection(numberId, campaignId, role) {
-    const activeLink = this.campaignsService.activeLinkFor(numberId);
-    if (!campaignId) { if (activeLink) this.campaignsService.unassign(numberId); return; }
-    if (activeLink && activeLink.campaignId === campaignId && activeLink.role === role) return;
-    this.campaignsService.assign(numberId, campaignId, role);
   }
 
   async archive(id) {
@@ -149,20 +139,21 @@ export class NumbersController {
 
   openCampaignForm(id) {
     const number=this.service.getNumber(id);if(!number)return;
-    const activeLink=this.campaignsService.activeLinkFor(id);
-    this.content.insertAdjacentHTML("beforeend",renderCampaignLinkForm(number,this.service.state.campaigns,activeLink));
+    const activeCampaignIds=new Set(this.campaignsService.activeLinksFor(id).map((link)=>link.campaignId));
+    const availableCampaigns=this.service.state.campaigns.filter((item)=>item.status==="ACTIVE"&&!activeCampaignIds.has(item.id));
+    this.content.insertAdjacentHTML("beforeend",renderCampaignAddForm(number,availableCampaigns));
     const close=()=>this.closeForm();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     const linkForm=this.content.querySelector("#campaign-link-form");
     linkForm?.addEventListener("submit",(event)=>guardedSubmit(linkForm,event,async()=>{
-      try { const values=Object.fromEntries(new FormData(linkForm));this.campaignsService.assign(id,values.campaignId,values.role);await this.campaignsService.flush();close();showToast(activeLink?"Vínculo de campanha atualizado.":"Número vinculado à campanha.","success");this.showDetail(id); }
+      try { const values=Object.fromEntries(new FormData(linkForm));this.campaignsService.assign(id,values.campaignId,values.role);await this.campaignsService.flush();close();showToast("Número vinculado à campanha.","success");this.showDetail(id); }
       catch(error){showToast(error.message,"error");}
     }));
   }
 
-  async endCampaignLink(id) {
-    if(!window.confirm("Encerrar o vínculo ativo desta campanha? O histórico será preservado."))return;
-    try { this.campaignsService.unassign(id);await this.campaignsService.flush();showToast("Vínculo de campanha encerrado.","warning");this.showDetail(id); }
+  async endCampaignLink(id, campaignId) {
+    if(!window.confirm("Encerrar este vínculo de campanha? O histórico será preservado."))return;
+    try { this.campaignsService.unassign(id,campaignId);await this.campaignsService.flush();showToast("Vínculo de campanha encerrado.","warning");this.showDetail(id); }
     catch(error){showToast(error.message,"error");}
   }
 

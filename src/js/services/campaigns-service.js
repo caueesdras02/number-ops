@@ -14,10 +14,38 @@ export class CampaignsService {
   close(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); if(item.status===CAMPAIGN_STATUSES.CLOSED)return item;item.status = CAMPAIGN_STATUSES.CLOSED; item.endedAt = now(); item.updatedAt = now(); this.state.numberCampaignLinks.filter((link) => link.campaignId === id && !link.endedAt).forEach((link) => { link.endedAt = item.endedAt; link.updatedAt = item.endedAt; this.numbers.record(link.numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: id, newValue: null }); }); this.persist(); return item; }
   reactivate(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); if (item.status === CAMPAIGN_STATUSES.ACTIVE) return item; item.status = CAMPAIGN_STATUSES.ACTIVE; item.endedAt = null; item.updatedAt = now(); this.persist(); return item; }
   availableNumbers() { return this.numbers.state.numbers.filter((number) => !number.archivedAt); }
-  activeLinkFor(numberId) { return this.state.numberCampaignLinks.find((link) => link.numberId === numberId && !link.endedAt) ?? null; }
+  /** Números disponíveis para vincular a uma campanha específica (exclui os já vinculados ativamente a ELA; um número pode estar em outras campanhas). */
+  availableNumbersFor(campaignId) { const linked = new Set(this.activeLinksForCampaign(campaignId).map((link) => link.numberId)); return this.availableNumbers().filter((number) => !linked.has(number.id)); }
+  /** Vínculo ativo entre um número e UMA campanha específica (um número pode ter vínculos ativos com várias campanhas). */
+  activeLinkForPair(numberId, campaignId) { return this.state.numberCampaignLinks.find((link) => link.numberId === numberId && link.campaignId === campaignId && !link.endedAt) ?? null; }
+  /** Todos os vínculos ativos (em qualquer campanha) de um número — um número pode estar em uso por várias campanhas simultaneamente. */
+  activeLinksFor(numberId) { return this.state.numberCampaignLinks.filter((link) => link.numberId === numberId && !link.endedAt).sort((a, b) => a.startedAt.localeCompare(b.startedAt)); }
+  activeLinksForCampaign(campaignId) { return this.state.numberCampaignLinks.filter((link) => link.campaignId === campaignId && !link.endedAt); }
   linksFor(numberId) { return this.state.numberCampaignLinks.filter((link) => link.numberId === numberId).sort((a,b) => b.startedAt.localeCompare(a.startedAt)); }
-  assign(numberId, campaignId, role) { const campaign = this.get(campaignId); if (!campaign || campaign.status !== CAMPAIGN_STATUSES.ACTIVE) throw new Error("Selecione uma campanha ativa."); if (!Object.values(CAMPAIGN_ROLES).includes(role)) throw new Error("Selecione o papel do número na campanha."); const previous = this.activeLinkFor(numberId);if(previous?.campaignId===campaignId&&previous?.role===role)return previous; if (previous) { previous.endedAt = now(); previous.updatedAt = previous.endedAt; this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: previous.campaignId, newValue: null }); } const link = createNumberCampaignLink({ numberId, campaignId, role }); this.state.numberCampaignLinks.push(link); this.persist(); this.numbers.record(numberId, "CAMPAIGN_JOINED", "Número entrou em campanha.", { previousValue: previous?.campaignId ?? null, newValue: { campaignId, role } }); return link; }
-  unassign(numberId) { const link = this.activeLinkFor(numberId); if (!link) return null; link.endedAt = now(); link.updatedAt = link.endedAt; this.persist(); this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: link.campaignId, newValue: null }); return link; }
+  /** Vincula um número a uma campanha (não afeta vínculos ativos com OUTRAS campanhas). Trocar o papel na MESMA campanha encerra o vínculo anterior e cria um novo, preservando histórico. Deriva cliente/squad da campanha no número. */
+  assign(numberId, campaignId, role) {
+    const campaign = this.get(campaignId);
+    if (!campaign || campaign.status !== CAMPAIGN_STATUSES.ACTIVE) throw new Error("Selecione uma campanha ativa.");
+    if (!Object.values(CAMPAIGN_ROLES).includes(role)) throw new Error("Selecione o papel do número na campanha.");
+    const previous = this.activeLinkForPair(numberId, campaignId);
+    if (previous?.role === role) return previous;
+    if (previous) { previous.endedAt = now(); previous.updatedAt = previous.endedAt; this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: campaignId, newValue: null }); }
+    const link = createNumberCampaignLink({ numberId, campaignId, role });
+    this.state.numberCampaignLinks.push(link);
+    this.numbers.deriveClientAndSquad(numberId, { clientId: campaign.clientId, squadId: campaign.squadId });
+    this.persist();
+    this.numbers.record(numberId, "CAMPAIGN_JOINED", "Número entrou em campanha.", { previousValue: previous ? campaignId : null, newValue: { campaignId, role } });
+    return link;
+  }
+  /** Encerra SOMENTE o vínculo com a campanha informada; outros vínculos ativos do número não são afetados. */
+  unassign(numberId, campaignId) {
+    const link = this.activeLinkForPair(numberId, campaignId);
+    if (!link) return null;
+    link.endedAt = now(); link.updatedAt = link.endedAt;
+    this.persist();
+    this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: campaignId, newValue: null });
+    return link;
+  }
   async hardDelete(id) {
     const existing = this.get(id);
     if (!existing) throw new Error("Campanha não encontrada.");

@@ -71,12 +71,19 @@ export class BackupService {
       const client = state.clients.find((item) => item.id === campaign.clientId);
       if (client && campaign.squadId && client.squadId && client.squadId !== campaign.squadId) throw new Error(`A Campanha ${campaign.id} relaciona Cliente e Squad incompatíveis.`);
     });
-    const activeNumbers = new Set();
+    const activePairs = new Set();
     state.numberCampaignLinks.forEach((link) => {
       if (!ids.numbers.has(link.numberId)) throw new Error(`O vínculo ${link.id} referencia um Número inexistente.`);
       if (!ids.campaigns.has(link.campaignId)) throw new Error(`O vínculo ${link.id} referencia uma Campanha inexistente.`);
       if (!Object.values(CAMPAIGN_ROLES).includes(link.role)) throw new Error(`O vínculo ${link.id} possui papel inválido.`);
-      if (!link.endedAt) { if (activeNumbers.has(link.numberId)) throw new Error(`O Número ${link.numberId} possui mais de um vínculo ativo.`); activeNumbers.add(link.numberId); const campaign = state.campaigns.find((item) => item.id === link.campaignId); if (campaign?.status === CAMPAIGN_STATUSES.CLOSED) throw new Error(`O vínculo ${link.id} está ativo em uma Campanha encerrada.`); }
+      if (!link.endedAt) {
+        // um número pode ter vínculos ativos com VÁRIAS campanhas; não pode repetir a MESMA campanha ativa duas vezes.
+        const pairKey = `${link.numberId}\u0000${link.campaignId}`;
+        if (activePairs.has(pairKey)) throw new Error(`O Número ${link.numberId} possui mais de um vínculo ativo com a mesma campanha.`);
+        activePairs.add(pairKey);
+        const campaign = state.campaigns.find((item) => item.id === link.campaignId);
+        if (campaign?.status === CAMPAIGN_STATUSES.CLOSED) throw new Error(`O vínculo ${link.id} está ativo em uma Campanha encerrada.`);
+      }
     });
     state.incidents.forEach((incident) => { if (!ids.numbers.has(incident.numberId)) throw new Error('Uma Ocorrência referencia um Número inexistente.'); if (incident.responsibleId && !ids.responsibles.has(incident.responsibleId)) throw new Error('Uma Ocorrência referencia um colaborador inexistente.'); if (incident.resolvedById && !ids.responsibles.has(incident.resolvedById)) throw new Error('Uma Ocorrência referencia um responsável pela resolução inexistente.'); });
     state.historyEvents.forEach((event) => { if (!ids.numbers.has(event.numberId)) throw new Error('Um evento de Histórico referencia um Número inexistente.'); });
