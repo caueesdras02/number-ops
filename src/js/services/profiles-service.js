@@ -1,4 +1,4 @@
-import { ACCESS_LEVELS, isMaster, assertLastMasterSafe } from "../models/access.js";
+import { ACCESS_LEVELS, isAdminOrAbove, isMaster, assertLastMasterSafe } from "../models/access.js";
 
 const JOB_TITLES = new Set(["ANALYST", "ACCOUNT_MANAGER"]);
 const STATUSES = new Set(["ACTIVE", "INACTIVE"]);
@@ -13,7 +13,7 @@ export class ProfilesService {
   }
 
   async update(id, input, currentProfile) {
-    if (currentProfile.access_level !== "ADMIN" && currentProfile.access_level !== "MASTER") {
+    if (!isAdminOrAbove(currentProfile)) {
       throw new Error("Somente administradores podem alterar usuários.");
     }
     const profiles = await this.profilesRepository.list();
@@ -35,6 +35,9 @@ export class ProfilesService {
 
     if (id === currentProfile.id && isMaster(currentProfile) && (input.status !== "ACTIVE" || nextLevel !== "MASTER")) {
       throw new Error("O MASTER atual não pode rebaixar ou desativar o próprio acesso.");
+    }
+    if (id === currentProfile.id && !isMaster(currentProfile) && (input.status !== "ACTIVE" || nextLevel !== currentProfile.access_level)) {
+      throw new Error("Você não pode desativar ou alterar o próprio nível de acesso.");
     }
     assertLastMasterSafe(profiles, id, { nextLevel, nextStatus: input.status });
 

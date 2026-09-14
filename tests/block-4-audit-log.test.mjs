@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { AuditLogService } from "../src/js/services/audit-log-service.js";
 import { renderAuditDetail, renderAuditLog } from "../src/js/ui/audit-log-view.js";
 import { renderAboutModal } from "../src/js/ui/about-view.js";
-import { renderCampaignLinkForm, renderNumberDetailView } from "../src/js/ui/number-detail-view.js";
+import { renderCampaignAddForm, renderNumberDetailView } from "../src/js/ui/number-detail-view.js";
 import { renderDirectoryForm } from "../src/js/ui/directory-view.js";
 import { DirectoryService } from "../src/js/services/directory-service.js";
 import { NumbersService } from "../src/js/services/numbers-service.js";
@@ -37,16 +37,28 @@ assert.match(about,/aria-modal="true"/);
 assert.match(about,/data-about-close/);
 
 const detail=renderNumberDetailView({number:state.numbers[0],locations:[],responsibles:[],clients:state.clients,groups:state.groups,campaigns:state.campaigns,campaignLinks:state.numberCampaignLinks});
-assert.match(detail,/Campanha atual/);
-assert.match(detail,/Principal/);
+assert.match(detail,/Campanhas vinculadas/);
+assert.match(detail,/Principal\/Disparo/);
 assert.match(detail,/Encerrar vínculo/);
-assert.match(renderCampaignLinkForm(state.numbers[0],state.campaigns,state.numberCampaignLinks[0]),/Principal|Backup|Apoio/);
+assert.match(renderCampaignAddForm(state.numbers[0],state.campaigns),/Principal\/Disparo|Backup|Apoio/);
 assert.match(renderDirectoryForm("clients",state.clients[0],state.groups),/name="squadId"/);
 
 let persisted=structuredClone(state);
 const operational=new NumbersService({initialize:()=>structuredClone(persisted),save:(next)=>{persisted=structuredClone(next);}});
 new DirectoryService(operational).update("clients","c1",{name:"Cliente",squadId:""});
 assert.equal(operational.state.clients[0].squadId,null);
+
+// Confirmação de e-mail (Supabase Auth): tela de sucesso/erro reconhecidas e com botão de volta ao login
+const { renderEmailConfirmed, renderEmailConfirmError } = await import("../src/js/ui/auth-view.js");
+const confirmedHtml = renderEmailConfirmed();
+assert.match(confirmedHtml, /E-mail confirmado com sucesso/);
+assert.match(confirmedHtml, /Sua conta já está ativa/);
+assert.match(confirmedHtml, /data-auth-mode="login"/);
+assert.doesNotMatch(confirmedHtml, /access_token|refresh_token/i, "token não deve ser exposto na tela");
+const confirmErrorHtml = renderEmailConfirmError("Email link is invalid or has expired");
+assert.match(confirmErrorHtml, /Não foi possível confirmar/);
+assert.match(confirmErrorHtml, /invalid or has expired/);
+assert.match(confirmErrorHtml, /data-auth-mode="login"/);
 
 const legacyState=structuredClone(state);
 delete legacyState.campaigns;

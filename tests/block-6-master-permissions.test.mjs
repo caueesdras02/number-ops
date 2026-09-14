@@ -99,9 +99,14 @@ const numbers = new NumbersService(repository, { hardDeletePort: port });
 assert.equal(numbers.utilizationOf("n1"), "AVAILABLE");
 assert.equal(numbers.utilizationOf("n2"), "UNAVAILABLE");
 
-// número com histórico não pode ser hard-deleted
+// número com ocorrência/vínculo é bloqueado; histórico por si só é apenas um EFEITO (removido junto), não bloqueia
 numbers.state.historyEvents.push({ id: "h9", numberId: "n1", type: "X", description: "x", occurredAt: new Date().toISOString() });
+numbers.state.incidents.push({ id: "i9", numberId: "n1", type: "OTHER", title: "x", status: "OPEN" });
 await assert.rejects(() => numbers.hardDelete("n1"), /Não é possível excluir/);
+numbers.state.incidents = numbers.state.incidents.filter((i) => i.id !== "i9");
+await assert.doesNotReject(() => numbers.hardDelete("n1"), "histórico isolado não deve bloquear a exclusão definitiva do número");
+assert.ok(!numbers.state.numbers.some((n) => n.id === "n1"), "número removido");
+assert.ok(!numbers.state.historyEvents.some((h) => h.numberId === "n1"), "histórico removido como efeito");
 
 // localização sem uso: exclui via port + estado
 const directory = new DirectoryService(numbers);
@@ -164,10 +169,9 @@ assert.match(respDetail, /Cliente A/);
 assert.doesNotMatch(respDetail, /Cliente B/, "só clientes do mesmo squad");
 assert.match(respDetail, /Campanha A/);
 
-const formHtml = renderNumberForm({ number: { id: "n1", phone: "5511999999991", clientIds: ["c1"], groupIds: [] }, locations: [], responsibles: [], clients: [{ id: "c1", name: "Cliente" }], groups: [], campaigns: [{ id: "camp1", name: "Campanha", status: "ACTIVE", clientId: "c1", squadId: "s1" }], activeLink: null });
-assert.match(formHtml, /name="campaignId"/);
-assert.match(formHtml, /name="campaignRole"/);
-assert.match(formHtml, /Compatíveis/);
+const formHtml = renderNumberForm({ number: { id: "n1", phone: "5511999999991", clientIds: ["c1"], groupIds: [] }, locations: [], responsibles: [], clients: [{ id: "c1", name: "Cliente" }], groups: [] });
+assert.match(formHtml, /Gerencie as campanhas vinculadas/);
+assert.doesNotMatch(formHtml, /name="campaignId"/, "vínculo de campanha não faz mais parte do formulário — é multi-campanha, gerenciado no detalhe");
 
 const listHtml = renderNumbersView([{ id: "n1", phone: "5511999999991", identification: "x", status: "ACTIVE", clientIds: [], groupIds: [], groupCount: 0, archivedAt: null }], [], [], "", "ALL", {}, [], [], true, [], [{ numberId: "n1", campaignId: "camp1", endedAt: null }]);
 assert.match(listHtml, /Utilização/);

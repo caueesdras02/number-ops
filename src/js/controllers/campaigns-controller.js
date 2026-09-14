@@ -25,7 +25,7 @@ export class CampaignsController {
   detail(id) {
     const item=this.service.get(id);if(!item)return this.render();const state=this.service.state;
     this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||""))});
-    this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{window.location.hash="#campaigns";});
+    this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{if(window.location.hash!=="#campaigns")window.location.hash="#campaigns";else this.render();});
     this.content.querySelector('[data-action="add-links"]')?.addEventListener("click",()=>this.openLinkForm(id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener("click",()=>this.hardDelete(id,true));
     this.content.querySelector('[data-action="close"]')?.addEventListener("click",async()=>{
@@ -38,7 +38,7 @@ export class CampaignsController {
     });
     this.content.querySelectorAll('[data-action="end-link"]').forEach((button)=>button.addEventListener("click",async()=>{
       if(!confirm("Encerrar este vínculo? O histórico será preservado."))return;
-      try{this.service.unassign(button.dataset.numberId);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
+      try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
     }));
   }
   async hardDelete(id,fromDetail=false) {
@@ -54,9 +54,14 @@ export class CampaignsController {
   }
   openForm(id=null) {
     const state=this.service.state;
-    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive)}));
+    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive),numbers:state.numbers,links:id?this.service.activeLinksForCampaign(id):[]}));
     const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
+    this.content.querySelector('[data-action="add-links-inline"]')?.addEventListener("click",()=>{close();this.openLinkForm(id,{onDone:()=>this.openForm(id)});});
+    this.content.querySelectorAll('[data-action="remove-link-inline"]').forEach((button)=>button.addEventListener("click",async()=>{
+      if(!confirm("Encerrar este vínculo? O histórico será preservado."))return;
+      try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();close();showToast("Vínculo encerrado.","warning");this.openForm(id);}catch(error){showToast(error.message,"error");}
+    }));
     const form=this.content.querySelector("#campaign-form");
     const squadSelect=form?.elements.squadId,clientSelect=form?.elements.clientId,squadHint=form?.querySelector("[data-squad-hint]");
     // Cliente -> Squad: selecionar o cliente deriva e trava o Squad da campanha.
@@ -78,23 +83,31 @@ export class CampaignsController {
       catch(error){if(squadSelect&&clientSelect?.selectedOptions[0]?.dataset.squad)squadSelect.disabled=true;showToast(error.message,"error");}
     }));
   }
-  openLinkForm(campaignId) {
+  openLinkForm(campaignId,{onDone}={}) {
     const campaign=this.service.get(campaignId);if(!campaign)return;
-    this.content.insertAdjacentHTML("beforeend",renderCampaignLinkAddForm({campaign,numbers:this.service.availableNumbers()}));
+    const done=onDone||(()=>this.detail(campaignId));
+    this.content.insertAdjacentHTML("beforeend",renderCampaignLinkAddForm({campaign,numbers:this.service.availableNumbersFor(campaignId)}));
     const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     const form=this.content.querySelector("#campaign-add-links-form");
+    form?.querySelector("[data-link-search]")?.addEventListener("input",(event)=>{
+      const query=event.target.value.trim().toLocaleLowerCase("pt-BR");
+      const rows=[...form.querySelectorAll("[data-relation-option]")];
+      let visible=0;
+      rows.forEach((row)=>{const matches=!query||row.textContent.toLocaleLowerCase("pt-BR").includes(query);row.hidden=!matches;if(matches)visible++;});
+      const empty=form.querySelector("[data-link-empty]");
+      if(empty)empty.hidden=visible!==0||rows.length===0;
+    });
     form?.addEventListener("submit",(event)=>guardedSubmit(form,event,async()=>{
       try{
         const formData=new FormData(form);
         const numberIds=formData.getAll("numberIds");
-        const role=formData.get("role");
         if(!numberIds.length) throw new Error("Selecione ao menos um número.");
-        numberIds.forEach((numberId)=>this.service.assign(numberId,campaignId,role));
+        numberIds.forEach((numberId)=>this.service.assign(numberId,campaignId,formData.get(`role_${numberId}`)||"PRIMARY"));
         await this.service.flush();
         close();
         showToast(numberIds.length>1?"Números vinculados à campanha.":"Número vinculado à campanha.","success");
-        this.detail(campaignId);
+        done();
       } catch(error){showToast(error.message,"error");}
     }));
   }

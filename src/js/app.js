@@ -28,7 +28,7 @@ import { ProfilesController } from "./controllers/profiles-controller.js";
 import { AuditLogService } from "./services/audit-log-service.js";
 import { AuditLogController } from "./controllers/audit-log-controller.js";
 import { AboutController } from "./controllers/about-controller.js";
-import { ACCESS_LEVEL_LABELS } from "./models/access.js";
+import { ACCESS_LEVEL_LABELS, isAdminOrAbove, isMaster } from "./models/access.js";
 import { initTheme, bindThemeToggles } from "./ui/theme-toggle.js";
 
 initTheme();
@@ -106,8 +106,13 @@ navigationLinks.forEach((link)=>link.addEventListener("click",()=>setMobileNavig
 window.addEventListener("keydown",(event)=>{if(event.key==="Escape"){content.querySelector(".modal-backdrop")?.remove();setMobileNavigation(false);}});
 window.matchMedia("(min-width: 861px)").addEventListener("change",(event)=>{if(event.matches)setMobileNavigation(false);});
 
+function clearAuthHash(){ window.history.replaceState(null,"",window.location.pathname+window.location.search); }
+
 async function bootstrap() {
-  const isPasswordRecovery=window.location.hash.includes("type=recovery");
+  const hashParams=new URLSearchParams(window.location.hash.replace(/^#/,""));
+  const isPasswordRecovery=hashParams.get("type")==="recovery";
+  const confirmationType=hashParams.get("type");
+  const authErrorDescription=hashParams.get("error_description")||hashParams.get("error_code")||hashParams.get("error");
   const supabase=await createConfiguredSupabaseClient();
   if(!supabase) {
     controllers=createOperationalControllers(new AppRepository(),{runLegacyMaintenance:true});
@@ -121,6 +126,22 @@ async function bootstrap() {
   const authService=new AuthService(new SupabaseAuthRepository(supabase));
   const authController=new AuthController({service:authService,root:appShell});
   if(isPasswordRecovery) { authController.mode="reset"; await authController.render(); bindThemeToggles(); return; }
+  if(hashParams.has("error")) {
+    clearAuthHash();
+    authController.mode="confirm-error";
+    authController.message=String(authErrorDescription).replace(/\+/g," ");
+    await authController.render();
+    bindThemeToggles();
+    return;
+  }
+  if(confirmationType==="signup"||confirmationType==="email_change"||confirmationType==="invite") {
+    try{await authService.signOut();}catch{ /* nenhuma sessão ativa a encerrar */ }
+    clearAuthHash();
+    authController.mode="confirmed";
+    await authController.render();
+    bindThemeToggles();
+    return;
+  }
   let authenticated=null;
   try{authenticated=await authService.getActiveSession();}catch{await authController.render();bindThemeToggles();return;}
   if(!authenticated){await authController.render();bindThemeToggles();return;}
@@ -131,9 +152,9 @@ async function bootstrap() {
   const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
   controllers=createOperationalControllers(remoteRepository,{hardDeletePort});
   profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),content,currentProfile:authenticated.profile});
-  if(authenticated.profile.access_level==="ADMIN"||authenticated.profile.access_level==="MASTER") auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
-  document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!(authenticated.profile.access_level==="ADMIN"||authenticated.profile.access_level==="MASTER");});
-  document.querySelectorAll("[data-master-only]").forEach((item)=>{item.hidden=authenticated.profile.access_level!=="MASTER";});
+  if(isAdminOrAbove(authenticated.profile)) auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
+  document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!isAdminOrAbove(authenticated.profile);});
+  document.querySelectorAll("[data-master-only]").forEach((item)=>{item.hidden=!isMaster(authenticated.profile);});
   const profileLabel=document.createElement("span");
   profileLabel.dataset.profileLabel="";
   profileLabel.className="environment-label";

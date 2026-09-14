@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { NumbersService } from "../src/js/services/numbers-service.js";
 import { CampaignsService } from "../src/js/services/campaigns-service.js";
+import { DashboardService } from "../src/js/services/dashboard-service.js";
 import { renderCampaignDetail, renderCampaigns, renderCampaignForm, renderCampaignLinkAddForm } from "../src/js/ui/campaigns-view.js";
 
 const state = {
   schemaVersion: 2, meta: { seedApplied: true },
-  groups: [{ id: "s1", name: "Squad Nexus", isActive: true }],
-  clients: [{ id: "c1", name: "Cliente 1", squadId: "s1", isActive: true }],
+  groups: [{ id: "s1", name: "Squad Nexus", isActive: true }, { id: "s2", name: "Squad Vega", isActive: true }],
+  clients: [{ id: "c1", name: "Cliente 1", squadId: "s1", isActive: true }, { id: "c2", name: "Cliente 2", squadId: "s2", isActive: true }],
   responsibles: [{ id: "r1", name: "Pedro Melo", team: "Nexus", isActive: true }],
   campaigns: [],
   numbers: [
-    { id: "n1", phone: "5511999999991", identification: "Chip 1", status: "ACTIVE", groupCount: 1, clientIds: ["c1"], groupIds: ["s1"], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
+    { id: "n1", phone: "5511999999991", identification: "Chip 1", status: "ACTIVE", groupCount: 1, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
     { id: "n2", phone: "5511999999992", identification: "Chip 2", status: "ACTIVE", groupCount: 1, clientIds: ["c1"], groupIds: ["s1"], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
     { id: "n3", phone: "5511999999993", identification: "Chip 3 arquivado", status: "INACTIVE", groupCount: 0, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: "2026-01-01T00:00:00.000Z" },
   ],
@@ -25,78 +26,173 @@ const campaigns = new CampaignsService(numbers);
 assert.throws(() => campaigns.create({ name: "Sem responsável", clientId: "c1", squadId: "s1" }), /responsável/i);
 
 // 2) criação com responsável funciona e é persistida
-const campaign = campaigns.create({ name: "Appel Home", clientId: "c1", squadId: "s1", responsibleId: "r1", notes: "" });
-assert.equal(campaign.responsibleId, "r1");
-assert.equal(campaign.status, "ACTIVE");
+const campaignA = campaigns.create({ name: "Appel Home", clientId: "c1", squadId: "s1", responsibleId: "r1", notes: "" });
+assert.equal(campaignA.responsibleId, "r1");
+assert.equal(campaignA.status, "ACTIVE");
+const campaignB = campaigns.create({ name: "Embaixador Móveis", clientId: "c2", squadId: "s2", responsibleId: "r1", notes: "" });
 
 // 3) availableNumbers() exclui números arquivados
 const available = campaigns.availableNumbers().map((item) => item.id);
 assert.deepEqual(available.sort(), ["n1", "n2"]);
 
-// 4) vincular vários números de uma vez (mesmo fluxo usado pelo formulário "Vincular números")
-campaigns.assign("n1", campaign.id, "PRIMARY");
-campaigns.assign("n2", campaign.id, "BACKUP");
-assert.equal(campaigns.activeLinkFor("n1").role, "PRIMARY");
-assert.equal(campaigns.activeLinkFor("n2").role, "BACKUP");
-assert.equal(campaigns.linksFor(campaign.id === "n1" ? "n1" : "n1").length, 1);
+// ---------------------------------------------------------------------------
+// MÚLTIPLAS CAMPANHAS SIMULTÂNEAS POR NÚMERO
+// ---------------------------------------------------------------------------
 
-// 5) alterar a função de um número preserva o vínculo anterior no histórico (não apaga)
-campaigns.assign("n1", campaign.id, "SUPPORT");
-const n1Links = campaigns.linksFor("n1");
-assert.equal(n1Links.length, 2, "deve manter o vínculo antigo encerrado + o novo vínculo");
-assert.ok(n1Links.some((link) => link.role === "PRIMARY" && link.endedAt));
-assert.ok(n1Links.some((link) => link.role === "SUPPORT" && !link.endedAt));
+// 4) número sem campanha nenhuma
+assert.equal(campaigns.activeLinksFor("n1").length, 0);
+assert.equal(numbers.utilizationOf("n1"), "AVAILABLE");
 
-// 6) detalhe do número (via campanhas anteriores) e detalhe da campanha renderizam responsável/funções
-const detailHtml = renderCampaignDetail({ item: campaign, clients: state.clients, squads: state.groups, responsibles: state.responsibles, numbers: numbers.state.numbers, locations: [], links: numbers.state.numberCampaignLinks.filter((link) => link.campaignId === campaign.id) });
+// 5) número com 1 campanha => EM USO
+campaigns.assign("n1", campaignA.id, "PRIMARY");
+assert.equal(campaigns.activeLinksFor("n1").length, 1);
+assert.equal(numbers.utilizationOf("n1"), "IN_USE");
+
+// 6) número com 2+ campanhas simultâneas (vínculo com A não é afetado ao vincular com B)
+campaigns.assign("n1", campaignB.id, "SUPPORT");
+assert.equal(campaigns.activeLinksFor("n1").length, 2, "número deve ter 2 vínculos ativos simultâneos");
+assert.ok(campaigns.activeLinkForPair("n1", campaignA.id), "vínculo com A permanece ativo");
+assert.ok(campaigns.activeLinkForPair("n1", campaignB.id), "vínculo com B foi criado");
+assert.equal(numbers.utilizationOf("n1"), "IN_USE");
+
+// 7) trocar o PAPEL na MESMA campanha encerra só aquele vínculo e cria outro (histórico preservado), sem afetar a outra campanha
+campaigns.assign("n1", campaignA.id, "BACKUP");
+assert.equal(campaigns.activeLinksFor("n1").length, 2, "ainda 2 vínculos ativos (A com novo papel + B)");
+assert.equal(campaigns.activeLinkForPair("n1", campaignA.id).role, "BACKUP");
+assert.equal(campaigns.activeLinkForPair("n1", campaignB.id).role, "SUPPORT", "vínculo com B não foi afetado pela troca de papel em A");
+assert.equal(campaigns.linksFor("n1").filter((l) => l.campaignId === campaignA.id).length, 2, "histórico de A preserva o vínculo PRIMARY encerrado + o BACKUP atual");
+
+// 8) remover uma campanha mantém a outra ativa
+campaigns.unassign("n1", campaignB.id);
+assert.equal(campaigns.activeLinksFor("n1").length, 1, "remover B deve manter A ativo");
+assert.ok(campaigns.activeLinkForPair("n1", campaignA.id));
+assert.equal(numbers.utilizationOf("n1"), "IN_USE", "ainda em uso por causa de A");
+
+// 9) remover a ÚLTIMA campanha ativa muda utilização para Disponível (número apto)
+campaigns.unassign("n1", campaignA.id);
+assert.equal(campaigns.activeLinksFor("n1").length, 0);
+assert.equal(numbers.utilizationOf("n1"), "AVAILABLE", "sem nenhum vínculo ativo e apto => Disponível");
+
+// ---------------------------------------------------------------------------
+// CLIENTE/SQUAD DERIVADO AUTOMATICAMENTE PELA CAMPANHA
+// ---------------------------------------------------------------------------
+
+// 10) vincular n1 (sem cliente/squad) à campanha A deriva cliente c1 e squad s1 automaticamente
+campaigns.assign("n1", campaignA.id, "PRIMARY");
+assert.ok(numbers.getNumber("n1").clientIds.includes("c1"), "cliente da campanha deve ser associado ao número");
+assert.ok(numbers.getNumber("n1").groupIds.includes("s1"), "squad da campanha deve ser associado ao número");
+
+// 11) vincular o MESMO número a uma campanha de OUTRO cliente PRESERVA a associação anterior (não substitui)
+campaigns.assign("n1", campaignB.id, "SUPPORT");
+assert.deepEqual(numbers.getNumber("n1").clientIds.sort(), ["c1", "c2"], "associações anteriores válidas não são apagadas");
+assert.deepEqual(numbers.getNumber("n1").groupIds.sort(), ["s1", "s2"]);
+
+// 12) associar de novo não duplica IDs
+campaigns.assign("n1", campaignA.id, "BACKUP"); // troca de papel na mesma campanha, mesmo cliente/squad
+assert.equal(numbers.getNumber("n1").clientIds.filter((id) => id === "c1").length, 1, "sem IDs duplicados");
+assert.equal(numbers.getNumber("n1").groupIds.filter((id) => id === "s1").length, 1);
+
+campaigns.unassign("n1", campaignA.id);
+campaigns.unassign("n1", campaignB.id);
+
+// ---------------------------------------------------------------------------
+// DASHBOARD: um número em várias campanhas conta apenas UMA vez como "Em uso"
+// ---------------------------------------------------------------------------
+
+// 13) n2 entra em DUAS campanhas simultâneas
+campaigns.assign("n2", campaignA.id, "PRIMARY");
+campaigns.assign("n2", campaignB.id, "BACKUP");
+assert.equal(campaigns.activeLinksFor("n2").length, 2);
+const dashboard = new DashboardService(numbers).getData();
+assert.equal(dashboard.metrics.inUse, 1, "n2 em 2 campanhas continua contando como 1 número em uso, não 2");
+assert.equal(dashboard.metrics.total, 2, "n1 arquivado (n3) não conta; n1 e n2 ativos contam uma vez cada");
+campaigns.unassign("n2", campaignA.id);
+campaigns.unassign("n2", campaignB.id);
+
+// ---------------------------------------------------------------------------
+// CAMPANHA → NÚMERO: vincular vários números de uma vez, com função individual por número
+// ---------------------------------------------------------------------------
+
+// 14) availableNumbersFor exclui números já vinculados ativamente à MESMA campanha
+campaigns.assign("n1", campaignA.id, "PRIMARY");
+const availableForA = campaigns.availableNumbersFor(campaignA.id).map((n) => n.id);
+assert.ok(!availableForA.includes("n1"), "n1 já está ativo em A, não deve aparecer para vincular de novo");
+assert.ok(availableForA.includes("n2"), "n2 não está em A, deve aparecer disponível");
+campaigns.unassign("n1", campaignA.id);
+
+// 15) formulário "Vincular números" tem checkbox + seletor de papel POR número
+const linkFormHtml = renderCampaignLinkAddForm({ campaign: campaignA, numbers: campaigns.availableNumbersFor(campaignA.id) });
+assert.match(linkFormHtml, /name="numberIds"/);
+assert.match(linkFormHtml, /name="role_n1"/, "cada número deve ter seu próprio seletor de papel");
+assert.match(linkFormHtml, /name="role_n2"/);
+assert.match(linkFormHtml, /Principal\/Disparo/);
+assert.doesNotMatch(linkFormHtml, /Chip 3/, "número arquivado não deve aparecer para vínculo");
+
+// 16) simula o submit do controller: cada número com seu próprio papel, campanha e cliente/squad derivados corretamente
+campaigns.assign("n1", campaignA.id, "PRIMARY");
+campaigns.assign("n2", campaignA.id, "BACKUP");
+assert.equal(campaigns.activeLinkForPair("n1", campaignA.id).role, "PRIMARY");
+assert.equal(campaigns.activeLinkForPair("n2", campaignA.id).role, "BACKUP");
+assert.ok(numbers.getNumber("n2").clientIds.includes("c1"));
+
+// 17) formulário de edição de campanha mostra "Números vinculados" com os vínculos atuais + ação de remover
+const editFormHtml = renderCampaignForm({ item: campaignA, clients: state.clients, squads: state.groups, responsibles: state.responsibles, numbers: numbers.state.numbers, links: campaigns.activeLinksForCampaign(campaignA.id) });
+assert.match(editFormHtml, /Números vinculados/);
+assert.match(editFormHtml, /data-action="remove-link-inline"/);
+assert.match(editFormHtml, /data-action="add-links-inline"/);
+const newFormHtml = renderCampaignForm({ item: {}, clients: state.clients, squads: state.groups, responsibles: state.responsibles });
+assert.match(newFormHtml, /depois de salvá-la/i, "campanha nova ainda sem id não pode gerenciar vínculos");
+
+campaigns.unassign("n1", campaignA.id);
+campaigns.unassign("n2", campaignA.id);
+
+// 18) detalhe do número (via campanhas anteriores) e detalhe da campanha renderizam responsável/funções
+const detailHtml = renderCampaignDetail({ item: campaignA, clients: state.clients, squads: state.groups, responsibles: state.responsibles, numbers: numbers.state.numbers, locations: [], links: numbers.state.numberCampaignLinks.filter((link) => link.campaignId === campaignA.id) });
 assert.match(detailHtml, /Pedro Melo/);
 assert.match(detailHtml, /Encerrar campanha/);
 assert.match(detailHtml, /Vincular números/);
+assert.match(detailHtml, /Números atuais/);
+assert.match(detailHtml, /Histórico de números/);
 
-// 7) encerrar campanha encerra vínculos ativos e preserva histórico
-campaigns.close(campaign.id);
-assert.equal(campaigns.get(campaign.id).status, "CLOSED");
-assert.ok(campaigns.activeLinkFor("n1") === null);
-assert.ok(campaigns.activeLinkFor("n2") === null);
-assert.equal(campaigns.linksFor("n1").length, 2, "histórico de vínculos de n1 não deve ser apagado ao encerrar");
+// 19) encerrar campanha encerra vínculos ativos e preserva histórico
+campaigns.assign("n1", campaignA.id, "PRIMARY");
+campaigns.close(campaignA.id);
+assert.equal(campaigns.get(campaignA.id).status, "CLOSED");
+assert.equal(campaigns.activeLinksFor("n1").length, 0);
+assert.ok(campaigns.linksFor("n1").length > 0, "histórico de vínculos de n1 não deve ser apagado ao encerrar");
 
-const closedListHtml = renderCampaigns({ campaigns: [campaigns.get(campaign.id)], clients: state.clients, squads: state.groups, responsibles: state.responsibles, filters: { query: "", status: "" } });
+const closedListHtml = renderCampaigns({ campaigns: [campaigns.get(campaignA.id)], clients: state.clients, squads: state.groups, responsibles: state.responsibles, filters: { query: "", status: "" } });
 assert.match(closedListHtml, /Reativar/);
 
-// 8) reativar usa a MESMA campanha (id preservado), status volta a ACTIVE, endedAt limpo
-const sameId = campaign.id;
-const reactivated = campaigns.reactivate(campaign.id);
+// 20) reativar usa a MESMA campanha (id preservado), status volta a ACTIVE, endedAt limpo
+const sameId = campaignA.id;
+const reactivated = campaigns.reactivate(campaignA.id);
 assert.equal(reactivated.id, sameId, "reativação não deve criar outra campanha");
 assert.equal(reactivated.status, "ACTIVE");
 assert.equal(reactivated.endedAt, null);
-assert.equal(campaigns.state.campaigns.length, 1, "nenhuma campanha duplicada deve existir após reativar");
 
-// 9) reativar novamente é idempotente (não duplica nem falha)
-const reactivatedAgain = campaigns.reactivate(campaign.id);
+// 21) reativar novamente é idempotente (não duplica nem falha)
+const reactivatedAgain = campaigns.reactivate(campaignA.id);
 assert.equal(reactivatedAgain.id, sameId);
 
-// 10) após reativação, novos vínculos são permitidos e o histórico anterior permanece
-campaigns.assign("n1", campaign.id, "PRIMARY");
-assert.equal(campaigns.linksFor("n1").length, 3, "novo vínculo some ao histórico existente, nada é apagado");
-assert.equal(campaigns.activeLinkFor("n1").role, "PRIMARY");
+// 22) após reativação, novos vínculos são permitidos e o histórico anterior permanece
+campaigns.assign("n1", campaignA.id, "PRIMARY");
+assert.ok(campaigns.linksFor("n1").length >= 3, "novo vínculo soma ao histórico existente, nada é apagado");
+assert.equal(campaigns.activeLinkForPair("n1", campaignA.id).role, "PRIMARY");
 
-// 11) formulário de campanha exige responsável (campo required no HTML) e formulário de vínculo lista só números disponíveis
+// 23) formulário de campanha exige responsável (campo required no HTML)
 const formHtml = renderCampaignForm({ item: {}, clients: state.clients, squads: state.groups, responsibles: state.responsibles });
 assert.match(formHtml, /name="responsibleId"[^>]*required/);
-const linkFormHtml = renderCampaignLinkAddForm({ campaign: campaigns.get(campaign.id), numbers: campaigns.availableNumbers() });
-assert.match(linkFormHtml, /Chip 1|Chip 2/);
-assert.doesNotMatch(linkFormHtml, /Chip 3/, "número arquivado não deve aparecer para vínculo");
 
-// 12) reload a partir do repositório confirma persistência íntegra de tudo acima
+// 24) reload a partir do repositório confirma persistência íntegra de tudo acima
 const reloadedNumbers = new NumbersService(repository);
 const reloadedCampaigns = new CampaignsService(reloadedNumbers);
 const reloadedCampaign = reloadedCampaigns.get(sameId);
 assert.equal(reloadedCampaign.status, "ACTIVE");
 assert.equal(reloadedCampaign.responsibleId, "r1");
-assert.equal(reloadedCampaigns.linksFor("n1").length, 3);
-assert.equal(reloadedCampaigns.state.campaigns.length, 1);
+assert.ok(reloadedCampaigns.linksFor("n1").length >= 3);
 
-// 13) proteção contra submit concorrente (bug de duplo clique/duplo Enter na criação de campanha)
+// 25) proteção contra submit concorrente (bug de duplo clique/duplo Enter na criação de campanha)
 const { guardedSubmit } = await import("../src/js/ui/form-submit-guard.js");
 let submitCount = 0;
 const fakeButton = { disabled: false, textContent: "Salvar", isConnected: true };
@@ -121,4 +217,4 @@ guardedSubmit(fakeForm, fakeEvent, () => { submitCount++; });
 await Promise.resolve(); await Promise.resolve();
 assert.equal(submitCount, 2, "após concluir, um novo submit legítimo deve ser permitido");
 
-console.log("Bloco 5: campanha↔números, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
+console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, dashboard sem contagem duplicada, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
