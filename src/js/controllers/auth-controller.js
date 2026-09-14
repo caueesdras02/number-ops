@@ -1,4 +1,4 @@
-import { renderForgotPassword, renderLogin, renderRegistration, renderResetPassword } from "../ui/auth-view.js";
+import { renderEmailConfirmError, renderEmailConfirmed, renderForgotPassword, renderLogin, renderRegistration, renderResetPassword } from "../ui/auth-view.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { bindThemeToggles } from "../ui/theme-toggle.js";
 
@@ -12,6 +12,8 @@ export class AuthController {
       this.mode === "register" ? renderRegistration(squads, this.message) :
       this.mode === "forgot" ? renderForgotPassword(this.message, this.forgotSent) :
       this.mode === "reset" ? renderResetPassword(this.message) :
+      this.mode === "confirmed" ? renderEmailConfirmed(this.message) :
+      this.mode === "confirm-error" ? renderEmailConfirmError(this.message) :
       renderLogin(this.message);
     this.root.querySelectorAll("[data-auth-mode]").forEach((button) => button.addEventListener("click", () => { this.mode = button.dataset.authMode; this.message = ""; this.forgotSent = false; this.render(); }));
     this.root.querySelector('[data-auth-form="login"]')?.addEventListener("submit", (event) => this.login(event));

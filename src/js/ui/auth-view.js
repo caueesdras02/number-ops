@@ -24,6 +24,14 @@ export function renderForgotPassword(message = "", sent = false) {
   return authShell(`${authMobileBrand()}<p class="eyebrow">Recuperar acesso</p><h1>Esqueci minha senha</h1><p class="auth-intro">${sent ? "Se o e-mail estiver cadastrado, enviamos um link para redefinir sua senha." : "Informe seu e-mail para receber um link de redefinição de senha."}</p>${message ? `<div class="auth-message" role="alert">${escapeHtml(message)}</div>` : ""}${sent ? `<button class="button button-quiet" type="button" data-auth-mode="login">Voltar ao login</button>` : `<form data-auth-form="forgot"><label>E-mail<input class="input" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label><button class="button button-primary auth-submit" type="submit">Enviar link de redefinição <span>→</span></button><button class="button button-quiet" type="button" data-auth-mode="login">Voltar ao login</button></form>`}`);
 }
 
+export function renderEmailConfirmed(message = "") {
+  return authShell(`${authMobileBrand()}<p class="eyebrow">Conta confirmada</p><h1>E-mail confirmado com sucesso!</h1><p class="auth-intro">Sua conta já está ativa. Você já pode voltar ao Number Ops e fazer login.</p>${message ? `<div class="auth-message" role="alert">${escapeHtml(message)}</div>` : ""}<button class="button button-primary auth-submit" type="button" data-auth-mode="login">Voltar para o login <span>→</span></button>`);
+}
+
+export function renderEmailConfirmError(message = "") {
+  return authShell(`${authMobileBrand()}<p class="eyebrow">Link inválido</p><h1>Não foi possível confirmar</h1><p class="auth-intro">${message ? escapeHtml(message) : "O link de confirmação é inválido ou já expirou."}</p><button class="button button-primary auth-submit" type="button" data-auth-mode="login">Voltar para o login <span>→</span></button><button class="button button-quiet" type="button" data-auth-mode="forgot">Recuperar acesso</button>`);
+}
+
 export function renderResetPassword(message = "") {
   return authShell(`${authMobileBrand()}<p class="eyebrow">Recuperar acesso</p><h1>Defina uma nova senha</h1><p class="auth-intro">Escolha uma nova senha para continuar.</p>${message ? `<div class="auth-message" role="alert">${escapeHtml(message)}</div>` : ""}<form data-auth-form="reset">${passwordField("Nova senha", "password", { autocomplete: "new-password", minlength: "8", placeholder: "Mínimo de 8 caracteres" })}${passwordField("Confirmar nova senha", "passwordConfirm", { autocomplete: "new-password", minlength: "8", placeholder: "Repita a nova senha" })}<button class="button button-primary auth-submit" type="submit">Salvar nova senha <span>→</span></button></form>`);
 }

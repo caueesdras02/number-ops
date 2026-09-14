@@ -55,6 +55,8 @@ const ACTION_LABELS = Object.freeze({
 const ENTITY_LABELS = Object.freeze({ NUMBER: "Número", CAMPAIGN: "Campanha", CLIENT: "Cliente", SQUAD: "Squad", INCIDENT: "Ocorrência", USER: "Usuário", LOCATION: "Localização", RESPONSIBLE: "Colaborador" });
 const FIELD_LABELS = Object.freeze({ phone:"Número", identification:"Identificação", status:"Status", locationId:"Localização", responsibleId:"Responsável", groupCount:"Quantidade de grupos", notes:"Observações", squadId:"Squad", role:"Papel", campaignId:"Campanha", jobTitle:"Cargo", accessLevel:"Nível de acesso", name:"Nome", team:"Squad" });
 
+import { isAdminOrAbove } from "../models/access.js";
+
 const mapRow = (row) => ({ id:row.id,userId:row.user_id,action:row.action,entityType:row.entity_type,entityId:row.entity_id,occurredAt:row.occurred_at,previousData:row.previous_data,newData:row.new_data,metadata:row.metadata??{} });
 const normalizeKey = (key) => key.replace(/_([a-z])/g, (_,letter)=>letter.toUpperCase());
 const comparable = (value) => JSON.stringify(value ?? null);
@@ -69,7 +71,7 @@ export class AuditLogService {
   }
 
   async load() {
-    if(this.currentProfile.access_level!=="ADMIN") throw new Error("Somente administradores podem consultar o Registro de atividades.");
+    if(!isAdminOrAbove(this.currentProfile)) throw new Error("Somente administradores podem consultar o Registro de atividades.");
     const [rows,profiles,squads]=await Promise.all([this.repository.list(),this.profilesRepository.list(),this.squadsRepository.list()]);
     const logs=rows.map(mapRow).map((log)=>this.enrich(log,profiles,squads)).sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
     return { logs,profiles:profiles.sort((a,b)=>a.name.localeCompare(b.name,"pt-BR")),squads:squads.filter((item)=>item.is_active).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR")) };

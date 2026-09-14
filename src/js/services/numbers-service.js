@@ -155,6 +155,21 @@ export class NumbersService {
     return updated;
   }
 
+  /** Deriva cliente/squad da campanha vinculada, sem remover associações existentes nem duplicar IDs. */
+  deriveClientAndSquad(numberId, { clientId = null, squadId = null } = {}) {
+    const existing = this.getNumber(numberId);
+    if (!existing) return existing;
+    const clientIds = clientId && !existing.clientIds.includes(clientId) ? [...existing.clientIds, clientId] : existing.clientIds;
+    const groupIds = squadId && !existing.groupIds.includes(squadId) ? [...existing.groupIds, squadId] : existing.groupIds;
+    if (clientIds === existing.clientIds && groupIds === existing.groupIds) return existing;
+    const updated = { ...existing, clientIds, groupIds, updatedAt: now() };
+    this.state.numbers = this.state.numbers.map((number) => number.id === numberId ? updated : number);
+    this.persist();
+    if (clientIds !== existing.clientIds) this.record(numberId, "CLIENT_ASSOCIATED", "Cliente associado automaticamente pela campanha.", { newValue: clientId });
+    if (groupIds !== existing.groupIds) this.record(numberId, "GROUP_ASSOCIATED", "Squad associado automaticamente pela campanha.", { newValue: squadId });
+    return updated;
+  }
+
   /** Exclusão definitiva (MASTER). Bloqueia se houver referências; remove no banco antes do estado local. */
   async hardDelete(id) {
     const existing = this.getNumber(id);

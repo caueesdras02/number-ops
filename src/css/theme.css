@@ -49,6 +49,15 @@
 .derived-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .derived-list li { padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface-muted); font-size: .84rem; }
 .derived-list .history-number { display: inline; }
+.derived-list-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Múltiplas campanhas por número: lista de cards ativos + formulário de vínculo com papel por número */
+.campaign-current-list { display: grid; gap: 10px; }
+.link-role-list { display: grid; gap: 6px; max-height: 44vh; overflow-y: auto; margin: 0; padding: 4px; border: 1px solid var(--color-border); border-radius: 10px; }
+.link-role-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.link-role-check { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.link-role-select { max-width: 160px; flex: 0 0 auto; }
+@media (max-width: 520px) { .link-role-row { flex-wrap: wrap; } .link-role-select { max-width: 100%; flex: 1 1 100%; } }
 
 .bulk-squad-list { display: grid; gap: 6px; max-height: 46vh; overflow-y: auto; margin: 6px 0 2px; padding: 4px; border: 1px solid var(--color-border); border-radius: 10px; }
 .check-option.check-row { width: 100%; justify-content: flex-start; }

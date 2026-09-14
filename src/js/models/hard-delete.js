@@ -12,7 +12,7 @@ export function describeReferences(state, entity, id) {
   if (entity === "numbers") {
     push(blockers, arr(state, "numberCampaignLinks").filter((l) => l.numberId === id).length, "vínculo(s) de campanha");
     push(blockers, arr(state, "incidents").filter((i) => i.numberId === id).length, "ocorrência(s)");
-    push(blockers, arr(state, "historyEvents").filter((h) => h.numberId === id).length, "evento(s) de histórico");
+    push(effects, arr(state, "historyEvents").filter((h) => h.numberId === id).length, "evento(s) de histórico serão removidos");
   } else if (entity === "clients") {
     push(blockers, arr(state, "campaigns").filter((c) => c.clientId === id).length, "campanha(s)");
     push(effects, arr(state, "numbers").filter((n) => (n.clientIds ?? []).includes(id)).length, "número(s) perderão este cliente");
