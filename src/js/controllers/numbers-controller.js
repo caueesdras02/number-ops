@@ -1,5 +1,6 @@
 import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
 import { renderCampaignAddForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
+import { renderChangeRoleForm } from "../ui/campaigns-view.js";
 import { showToast } from '../ui/toast.js';
 import { guardedSubmit } from '../ui/form-submit-guard.js';
 import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
@@ -56,6 +57,7 @@ export class NumbersController {
     this.content.querySelector('[data-action="remove-restriction"]')?.addEventListener('click', () => this.removeRestriction(number.id));
     this.content.querySelector('[data-action="manage-campaign"]')?.addEventListener('click', () => this.openCampaignForm(number.id));
     this.content.querySelectorAll('[data-action="end-campaign-link"]').forEach((button) => button.addEventListener('click', () => this.endCampaignLink(number.id, button.dataset.campaignId)));
+    this.content.querySelectorAll('[data-action="change-role"]').forEach((button) => button.addEventListener('click', () => this.openChangeRoleForm(number.id, button.dataset.campaignId, button.dataset.role)));
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener('click', () => this.hardDelete(number.id, true));
     this.content.querySelector('[data-action="restore"]')?.addEventListener('click', async () => { try { this.service.restore(number.id); await this.service.flush(); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); } catch(error) { showToast(error.message,"error"); } });
@@ -153,6 +155,25 @@ export class NumbersController {
     if(!window.confirm("Encerrar este vínculo de campanha? O histórico será preservado."))return;
     try { this.campaignsService.unassign(id,campaignId);await this.campaignsService.flush();showToast("Vínculo de campanha encerrado.","warning");this.showDetail(id); }
     catch(error){showToast(error.message,"error");}
+  }
+
+  openChangeRoleForm(numberId, campaignId, currentRole) {
+    const number=this.service.getNumber(numberId);const campaign=this.service.state.campaigns.find((item)=>item.id===campaignId);
+    if(!number||!campaign)return;
+    this.content.insertAdjacentHTML("beforeend",renderChangeRoleForm({numberId,campaignId,phone:number.phone,campaignName:campaign.name,currentRole}));
+    const close=()=>this.closeForm();
+    this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
+    const form=this.content.querySelector("#change-role-form");
+    form?.addEventListener("submit",(event)=>guardedSubmit(form,event,async()=>{
+      try{
+        const role=new FormData(form).get("role");
+        this.campaignsService.assign(numberId,campaignId,role);
+        await this.campaignsService.flush();
+        close();
+        showToast("Função atualizada.","success");
+        this.showDetail(numberId);
+      }catch(error){showToast(error.message,"error");}
+    }));
   }
 
   openRestrictionForm(id) {

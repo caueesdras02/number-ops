@@ -1,4 +1,4 @@
-import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns } from "../ui/campaigns-view.js";
+import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns, renderChangeRoleForm } from "../ui/campaigns-view.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
@@ -40,6 +40,25 @@ export class CampaignsController {
     this.content.querySelectorAll('[data-action="end-link"]').forEach((button)=>button.addEventListener("click",async()=>{
       if(!confirm("Encerrar este vínculo? O histórico será preservado."))return;
       try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
+    }));
+    this.content.querySelectorAll('[data-action="change-role"]').forEach((button)=>button.addEventListener("click",()=>this.openChangeRoleForm(id,button.dataset.numberId,button.dataset.role)));
+  }
+  openChangeRoleForm(campaignId,numberId,currentRole) {
+    const campaign=this.service.get(campaignId);const number=this.service.state.numbers.find((item)=>item.id===numberId);
+    if(!campaign||!number)return;
+    this.content.insertAdjacentHTML("beforeend",renderChangeRoleForm({numberId,campaignId,phone:number.phone,campaignName:campaign.name,currentRole}));
+    const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
+    this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
+    const form=this.content.querySelector("#change-role-form");
+    form?.addEventListener("submit",(event)=>guardedSubmit(form,event,async()=>{
+      try{
+        const role=new FormData(form).get("role");
+        this.service.assign(numberId,campaignId,role);
+        await this.service.flush();
+        close();
+        showToast("Função atualizada.","success");
+        this.detail(campaignId);
+      }catch(error){showToast(error.message,"error");}
     }));
   }
   async hardDelete(id,fromDetail=false) {

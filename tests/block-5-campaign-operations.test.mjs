@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { NumbersService } from "../src/js/services/numbers-service.js";
 import { CampaignsService } from "../src/js/services/campaigns-service.js";
 import { DashboardService } from "../src/js/services/dashboard-service.js";
-import { renderCampaignDetail, renderCampaigns, renderCampaignForm, renderCampaignLinkAddForm } from "../src/js/ui/campaigns-view.js";
+import { renderCampaignDetail, renderCampaigns, renderCampaignForm, renderCampaignLinkAddForm, renderChangeRoleForm } from "../src/js/ui/campaigns-view.js";
+import { renderNumberDetailView } from "../src/js/ui/number-detail-view.js";
 
 const state = {
   schemaVersion: 2, meta: { seedApplied: true },
@@ -278,4 +279,31 @@ assert.match(withGapHtml, /data-admin-only/);
 assert.match(withGapHtml, /Chip 3/);
 assert.match(withGapHtml, /Campanha X/);
 
-console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
+// ---------------------------------------------------------------------------
+// ALTERAR FUNÇÃO: trocar o papel de um vínculo ativo num clique só (sem precisar
+// encerrar manualmente e vincular de novo) — continua preservando histórico.
+// ---------------------------------------------------------------------------
+
+// 30) form pré-seleciona a função atual do vínculo
+const changeRoleFormHtml = renderChangeRoleForm({ numberId: "gn1", campaignId: campaignForGc1.id, phone: "5511988880001", campaignName: campaignForGc1.name, currentRole: "BACKUP" });
+assert.match(changeRoleFormHtml, /Alterar função/);
+assert.match(changeRoleFormHtml, /<option value="BACKUP" selected>/);
+assert.match(changeRoleFormHtml, new RegExp(campaignForGc1.name));
+
+// 31) botão "Alterar função" aparece no vínculo ATUAL, tanto no detalhe da campanha quanto no do número
+const detailWithChangeRole = renderCampaignDetail({ item: campaignForGc1, clients: gapState.clients, squads: gapState.groups, responsibles: gapState.responsibles, numbers: gapNumbers.state.numbers, locations: [], links: gapCampaigns.state.numberCampaignLinks.filter((l) => l.campaignId === campaignForGc1.id) });
+assert.match(detailWithChangeRole, /data-action="change-role" data-number-id="gn1" data-role="BACKUP"/);
+
+const numberDetailWithChangeRole = renderNumberDetailView({ number: gapNumbers.getNumber("gn1"), locations: [], responsibles: gapState.responsibles, clients: gapState.clients, groups: gapState.groups, campaigns: gapCampaigns.state.campaigns, campaignLinks: gapCampaigns.linksFor("gn1"), utilization: gapNumbers.utilizationOf("gn1") });
+assert.match(numberDetailWithChangeRole, new RegExp(`data-action="change-role" data-campaign-id="${campaignForGc1.id}" data-role="BACKUP"`));
+
+// 32) o que o submit do modal faz de fato: assign() com a nova função encerra o vínculo atual (vai pro
+// histórico) e cria outro — não perde nada, não duplica campanha.
+const linksBefore = gapCampaigns.linksFor("gn1").length;
+gapCampaigns.assign("gn1", campaignForGc1.id, "PRIMARY");
+assert.equal(gapCampaigns.activeLinkForPair("gn1", campaignForGc1.id).role, "PRIMARY", "função atualizada no vínculo ativo");
+assert.equal(gapCampaigns.linksFor("gn1").length, linksBefore + 1, "função alterada soma ao histórico, não substitui o registro anterior");
+assert.ok(gapCampaigns.linksFor("gn1").some((l) => l.role === "BACKUP" && l.endedAt), "vínculo anterior (BACKUP) permanece no histórico");
+assert.equal(gapCampaigns.state.campaigns.filter((c) => c.id === campaignForGc1.id).length, 1, "não duplica a campanha");
+
+console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, alterar função num clique, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
