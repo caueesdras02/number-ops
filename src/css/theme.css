@@ -45,6 +45,13 @@
 .access-level { font-weight: 800; }
 .access-master { color: var(--color-primary-deep); }
 
+/* Relatório de possíveis vínculos número↔campanha faltando (diagnóstico, não corrige sozinho). */
+.gap-report { margin: 0 0 18px; padding: 12px 16px; border: 1px solid var(--color-warning); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.gap-report summary { cursor: pointer; font-weight: 700; color: var(--color-warning); list-style: none; }
+.gap-report summary::-webkit-details-marker { display: none; }
+.gap-report[open] summary { margin-bottom: 8px; }
+.gap-report .form-hint { margin: 6px 0 10px; }
+
 .campaign-subheading { margin: 18px 0 8px; font-size: .82rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: .06em; }
 .derived-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .derived-list li { padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface-muted); font-size: .84rem; }

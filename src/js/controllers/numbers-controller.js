@@ -69,7 +69,7 @@ export class NumbersController {
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
     form.querySelectorAll("[data-relation-search]").forEach((input) => input.addEventListener("input", () => this.filterRelationOptions(form, input)));
-    form.addEventListener("submit", (event) => guardedSubmit(form, event, () => this.submitForm(event)));
+    form.addEventListener("submit", (event) => guardedSubmit(form, event, () => this.submitForm(form)));
   }
 
   closeForm() { this.content.querySelector(".modal-backdrop")?.remove(); }
@@ -90,9 +90,7 @@ export class NumbersController {
     if (emptyHint) emptyHint.hidden = visibleCount !== 0 || options.length === 0;
   }
 
-  async submitForm(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
+  async submitForm(form) {
     const formData = new FormData(form);
     const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
     try {

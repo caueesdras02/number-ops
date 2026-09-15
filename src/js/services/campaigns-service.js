@@ -69,6 +69,31 @@ export class CampaignsService {
     });
   }
 
+  /**
+   * Diagnóstico (não altera nada): números que têm um cliente associado (clientIds) mas
+   * NÃO possuem vínculo ativo com nenhuma campanha ativa daquele cliente. Sinal de que o
+   * vínculo real pode nunca ter sido criado (ex.: limitação do sistema antigo de só 1
+   * vínculo ativo por número) — precisa de revisão humana, não é corrigido automaticamente.
+   */
+  findClientCampaignGaps() {
+    const activeCampaignsByClient = new Map();
+    this.state.campaigns.filter((campaign) => campaign.status === CAMPAIGN_STATUSES.ACTIVE && campaign.clientId).forEach((campaign) => {
+      if (!activeCampaignsByClient.has(campaign.clientId)) activeCampaignsByClient.set(campaign.clientId, []);
+      activeCampaignsByClient.get(campaign.clientId).push(campaign);
+    });
+    const clientName = (id) => this.state.clients.find((item) => item.id === id)?.name ?? "—";
+    const gaps = [];
+    this.numbers.state.numbers.filter((number) => !number.archivedAt).forEach((number) => {
+      const linkedCampaignIds = new Set(this.activeLinksFor(number.id).map((link) => link.campaignId));
+      (number.clientIds ?? []).forEach((clientId) => {
+        (activeCampaignsByClient.get(clientId) ?? []).forEach((campaign) => {
+          if (!linkedCampaignIds.has(campaign.id)) gaps.push({ numberId: number.id, phone: number.phone, identification: number.identification, clientId, clientName: clientName(clientId), campaignId: campaign.id, campaignName: campaign.name });
+        });
+      });
+    });
+    return gaps;
+  }
+
   persist() { this.numbers.persist(); }
   flush() { return this.numbers.flush(); }
   validate(input) { if (!String(input.name ?? "").trim()) throw new Error("Informe o nome da campanha."); if (!input.squadId || !input.clientId) throw new Error("Selecione Squad e Cliente."); if (!input.responsibleId) throw new Error("Selecione o responsável pela campanha."); const client = this.state.clients.find((item) => item.id === input.clientId); if (!client || (client.squadId && client.squadId !== input.squadId)) throw new Error("O Cliente deve pertencer ao Squad selecionado."); }

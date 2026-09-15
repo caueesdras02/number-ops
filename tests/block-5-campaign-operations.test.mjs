@@ -234,4 +234,48 @@ guardedSubmit(fakeForm, fakeEvent, () => { submitCount++; });
 await Promise.resolve(); await Promise.resolve();
 assert.equal(submitCount, 2, "após concluir, um novo submit legítimo deve ser permitido");
 
-console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, dashboard sem contagem duplicada, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
+// ---------------------------------------------------------------------------
+// RELATÓRIO DE VÍNCULO FALTANDO: número tem cliente associado, mas nenhum vínculo
+// ativo com nenhuma campanha ativa desse cliente (ex.: gap herdado do sistema antigo,
+// que só permitia 1 vínculo ativo por número — sem a checagem, ninguém percebe).
+// ---------------------------------------------------------------------------
+
+// Estado isolado só pra este bloco — evita depender do histórico acumulado das seções anteriores.
+const gapState = {
+  schemaVersion: 2, meta: { seedApplied: true },
+  groups: [{ id: "gs1", name: "Squad Gap", isActive: true }],
+  clients: [{ id: "gc1", name: "Cliente com vínculo", squadId: "gs1", isActive: true }, { id: "gc2", name: "Cliente sem vínculo", squadId: "gs1", isActive: true }],
+  responsibles: [{ id: "gr1", name: "Resp", isActive: true }],
+  campaigns: [], numbers: [
+    { id: "gn1", phone: "5511988880001", identification: "Chip Gap 1", status: "ACTIVE", groupCount: 0, clientIds: ["gc1"], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
+    { id: "gn2", phone: "5511988880002", identification: "Chip Gap 2", status: "ACTIVE", groupCount: 0, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
+  ],
+  numberCampaignLinks: [], incidents: [], historyEvents: [], locations: [],
+};
+let gapPersisted = structuredClone(gapState);
+const gapNumbers = new NumbersService({ initialize: () => structuredClone(gapPersisted), save: (v) => { gapPersisted = structuredClone(v); } });
+const gapCampaigns = new CampaignsService(gapNumbers);
+const campaignForGc1 = gapCampaigns.create({ name: "Campanha do Cliente com vínculo", clientId: "gc1", squadId: "gs1", responsibleId: "gr1" });
+
+// 26) gn1 tem o cliente gc1 associado (manualmente, sem vínculo de campanha real) => aparece no relatório
+let gaps = gapCampaigns.findClientCampaignGaps();
+assert.ok(gaps.some((g) => g.numberId === "gn1" && g.clientId === "gc1" && g.campaignId === campaignForGc1.id), "número com cliente associado mas sem vínculo ativo deve aparecer no relatório");
+
+// 27) o relatório some assim que o número é vinculado de verdade à campanha do cliente
+gapCampaigns.assign("gn1", campaignForGc1.id, "BACKUP");
+gaps = gapCampaigns.findClientCampaignGaps();
+assert.ok(!gaps.some((g) => g.numberId === "gn1" && g.campaignId === campaignForGc1.id), "vinculado de verdade, o gap deve desaparecer");
+
+// 28) número sem esse cliente associado não gera falso positivo
+assert.ok(!gaps.some((g) => g.numberId === "gn2"), "gn2 nunca teve o cliente gc1 associado, não deve aparecer");
+
+// 29) painel de diagnóstico só aparece quando há gaps, e some quando não há
+const campaignsListHtml = renderCampaigns({ campaigns: campaigns.list({}), clients: state.clients, squads: state.groups, responsibles: state.responsibles, filters: { query: "", status: "" }, gaps: [] });
+assert.doesNotMatch(campaignsListHtml, /vínculo.*faltando/i, "sem gaps, o painel não deve aparecer");
+const withGapHtml = renderCampaigns({ campaigns: campaigns.list({}), clients: state.clients, squads: state.groups, responsibles: state.responsibles, filters: { query: "", status: "" }, gaps: [{ numberId: "n3", phone: "5511999999993", identification: "Chip 3", clientId: "c2", clientName: "Cliente 2", campaignId: "x", campaignName: "Campanha X" }] });
+assert.match(withGapHtml, /vínculo.*faltando/i);
+assert.match(withGapHtml, /data-admin-only/);
+assert.match(withGapHtml, /Chip 3/);
+assert.match(withGapHtml, /Campanha X/);
+
+console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
