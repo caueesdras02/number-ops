@@ -7,7 +7,7 @@ import { NumbersService } from "../src/js/services/numbers-service.js";
 import { CampaignsService } from "../src/js/services/campaigns-service.js";
 import { DirectoryService } from "../src/js/services/directory-service.js";
 import { ProfilesService } from "../src/js/services/profiles-service.js";
-import { renderResponsibleDetail } from "../src/js/ui/directory-view.js";
+import { renderDirectory, renderResponsibleDetail } from "../src/js/ui/directory-view.js";
 import { renderNumberForm, renderNumbersView } from "../src/js/ui/numbers-view.js";
 import { renderCampaignDetail } from "../src/js/ui/campaigns-view.js";
 import { renderIncidentForm } from "../src/js/ui/incidents-view.js";
@@ -186,6 +186,17 @@ assert.match(campDetail, /Histórico de números/);
 const incForm = renderIncidentForm(null, [{ id: "n1", phone: "5511999999991" }], []);
 assert.match(incForm, /name="type"/);
 
+// Clientes/Squads/Colaboradores/Localizações: escrita (adicionar/editar/arquivar) só ADMIN/MASTER
+// (gate via data-admin-only, CSS já esconde de USER e VIEWER). Números/Campanhas ficam de fora
+// desta checagem — USER continua operando normalmente nelas (não usam renderDirectory).
+const directoryItems = [{ id: "d1", name: "Item", isActive: true }];
+for (const type of ["clients", "groups", "responsibles", "locations"]) {
+  const html = renderDirectory(type, directoryItems, "", [], []);
+  assert.match(html, /data-action="add" data-admin-only/, `${type}: adicionar deve ser restrito a ADMIN/MASTER`);
+  assert.match(html, /data-action="edit" data-id="d1" data-admin-only/, `${type}: editar deve ser restrito a ADMIN/MASTER`);
+  assert.match(html, /data-action="archive" data-id="d1" data-admin-only/, `${type}: arquivar deve ser restrito a ADMIN/MASTER`);
+}
+
 // ---------------------------------------------------------------------------
 // Migrations 008 / 009
 // ---------------------------------------------------------------------------
@@ -204,4 +215,10 @@ for (const action of ["NUMBER_DELETED", "CLIENT_DELETED", "SQUAD_DELETED", "CAMP
 assert.doesNotMatch(m009, /truncate|drop table/i);
 assert.match(m009, /current_is_master\(\)/);
 
-console.log("Bloco 6: MASTER, exclusão definitiva, utilização, colaborador→squad e migrations 008/009 validados.");
+const m012 = await readFile(new URL("../supabase/012_restrict_directory_writes_to_admin.sql", import.meta.url), "utf8");
+assert.match(m012, /alter policy %I on public\.%I with check \(public\.current_access_level\(\) in \(''MASTER'',''ADMIN''\)\)/);
+for (const table of ["clients", "squads", "responsibles", "locations"]) assert.match(m012, new RegExp(`'${table}'`));
+assert.doesNotMatch(m012, /array\[[^\]]*'numbers'|array\[[^\]]*'campaigns'/, "números e campanhas não devem ser restringidos — USER continua operando");
+assert.doesNotMatch(m012, /truncate|drop table|delete from/i);
+
+console.log("Bloco 6: MASTER, exclusão definitiva, utilização, colaborador→squad, restrição de escrita em Clientes/Squads/Colaboradores e migrations 008/009/012 validados.");
