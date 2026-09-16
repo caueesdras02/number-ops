@@ -133,7 +133,7 @@ export class NumbersService {
     const existing = this.getNumber(id);
     if (!existing) throw new Error("Número não encontrado.");
     const kind = String(input.kind ?? "");
-    const descriptions = { GROUP_CREATION: "Não consegue criar squads", SEND_LIMIT: "Limitação no envio", OTHER: "Outra restrição" };
+    const descriptions = { GROUP_CREATION: "Não consegue criar squads", SEND_LIMIT: "Limitação no envio", NO_AREA: "Sem área — número não pode ser utilizado", OTHER: "Outra restrição" };
     if (!descriptions[kind]) throw new Error("Selecione o tipo de restrição.");
     const description = String(input.description ?? "").trim();
     if (kind === "OTHER" && !description) throw new Error("Descreva a outra restrição.");

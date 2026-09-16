@@ -13,13 +13,27 @@ export const UTILIZATION = Object.freeze({ IN_USE: "IN_USE", AVAILABLE: "AVAILAB
 export const UTILIZATION_LABELS = Object.freeze({ IN_USE: "Em uso", AVAILABLE: "Disponível", UNAVAILABLE: "Indisponível" });
 
 /**
+ * kinds de restrição que existem hoje (registerRestriction). Nem toda restrição impede
+ * utilização — GROUP_CREATION/SEND_LIMIT/OTHER são limitações registradas mas não retiram
+ * o número de operação. NO_AREA é uma condição operacional persistente: o número não pode
+ * ser utilizado. Centralizado aqui para nunca precisar duplicar essa lista em service/UI.
+ */
+export const RESTRICTION_KINDS = Object.freeze({ GROUP_CREATION: "GROUP_CREATION", SEND_LIMIT: "SEND_LIMIT", NO_AREA: "NO_AREA", OTHER: "OTHER" });
+export const BLOCKING_RESTRICTION_KINDS = Object.freeze(new Set([RESTRICTION_KINDS.NO_AREA]));
+
+/** Restrição ativa cujo kind impede utilização do número (hoje: só NO_AREA). */
+export function hasBlockingRestriction(number) {
+  return Boolean(number?.restriction && BLOCKING_RESTRICTION_KINDS.has(number.restriction.kind));
+}
+
+/**
  * Utilização é DERIVADA (nunca armazenada):
  * - vínculo de campanha ativo => EM USO;
- * - sem vínculo ativo + operacionalmente apto => DISPONÍVEL;
- * - caso contrário (bloqueado/inativo/em análise/arquivado) => INDISPONÍVEL.
+ * - sem vínculo ativo + operacionalmente apto + sem restrição bloqueante => DISPONÍVEL;
+ * - caso contrário (bloqueado/inativo/em análise/arquivado/restrição bloqueante) => INDISPONÍVEL.
  */
 export function getUtilization(number, hasActiveCampaignLink) {
   if (hasActiveCampaignLink) return UTILIZATION.IN_USE;
-  if (isAvailableForOperation(number)) return UTILIZATION.AVAILABLE;
+  if (isAvailableForOperation(number) && !hasBlockingRestriction(number)) return UTILIZATION.AVAILABLE;
   return UTILIZATION.UNAVAILABLE;
 }

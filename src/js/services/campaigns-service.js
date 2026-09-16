@@ -1,6 +1,7 @@
 import { createCampaign, createNumberCampaignLink } from "../models/entities.js";
 import { now } from "../models/helpers.js";
 import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete.js";
+import { hasBlockingRestriction } from "../models/number.js";
 
 export const CAMPAIGN_STATUSES = Object.freeze({ ACTIVE: "ACTIVE", CLOSED: "CLOSED" });
 export const CAMPAIGN_ROLES = Object.freeze({ PRIMARY: "PRIMARY", BACKUP: "BACKUP", SUPPORT: "SUPPORT" });
@@ -13,7 +14,8 @@ export class CampaignsService {
   update(id, input) { const existing = this.get(id); if (!existing) throw new Error("Campanha não encontrada."); this.validate(input); const item = { ...existing, name: String(input.name).trim(), clientId: input.clientId || null, squadId: input.squadId || null, responsibleId: input.responsibleId || null, notes: String(input.notes ?? "").trim(), updatedAt: now() }; Object.assign(existing, item); this.persist(); return existing; }
   close(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); if(item.status===CAMPAIGN_STATUSES.CLOSED)return item;item.status = CAMPAIGN_STATUSES.CLOSED; item.endedAt = now(); item.updatedAt = now(); this.state.numberCampaignLinks.filter((link) => link.campaignId === id && !link.endedAt).forEach((link) => { link.endedAt = item.endedAt; link.updatedAt = item.endedAt; this.numbers.record(link.numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: id, newValue: null }); }); this.persist(); return item; }
   reactivate(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); if (item.status === CAMPAIGN_STATUSES.ACTIVE) return item; item.status = CAMPAIGN_STATUSES.ACTIVE; item.endedAt = null; item.updatedAt = now(); this.persist(); return item; }
-  availableNumbers() { return this.numbers.state.numbers.filter((number) => !number.archivedAt); }
+  /** Candidatos a novo vínculo: nem arquivados, nem com restrição operacional bloqueante (ex.: Sem área). */
+  availableNumbers() { return this.numbers.state.numbers.filter((number) => !number.archivedAt && !hasBlockingRestriction(number)); }
   /** Números disponíveis para vincular a uma campanha específica (exclui os já vinculados ativamente a ELA; um número pode estar em outras campanhas). */
   availableNumbersFor(campaignId) { const linked = new Set(this.activeLinksForCampaign(campaignId).map((link) => link.numberId)); return this.availableNumbers().filter((number) => !linked.has(number.id)); }
   /** Vínculo ativo entre um número e UMA campanha específica (um número pode ter vínculos ativos com várias campanhas). */
@@ -29,6 +31,11 @@ export class CampaignsService {
     if (!Object.values(CAMPAIGN_ROLES).includes(role)) throw new Error("Selecione o papel do número na campanha.");
     const previous = this.activeLinkForPair(numberId, campaignId);
     if (previous?.role === role) return previous;
+    if (!previous) {
+      const number = this.numbers.getNumber(numberId);
+      if (!number) throw new Error("Número não encontrado.");
+      if (hasBlockingRestriction(number)) throw new Error("Este número possui uma restrição operacional ativa (Sem área) e não pode ser vinculado a uma nova campanha.");
+    }
     if (previous) { previous.endedAt = now(); previous.updatedAt = previous.endedAt; this.numbers.record(numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: campaignId, newValue: null }); }
     const link = createNumberCampaignLink({ numberId, campaignId, role });
     this.state.numberCampaignLinks.push(link);
