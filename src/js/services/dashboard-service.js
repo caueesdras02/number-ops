@@ -11,6 +11,9 @@ export class DashboardService {
     const countBy = (items, key, labels = null) => Object.entries(items.reduce((a, item) => { const k = labels ? labels(item) : item[key]; a[k] = (a[k] || 0) + 1; return a; }, {})).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
     const related = (field, entities) => entities.map((e) => ({ label: e.name, count: active.filter((n) => (n[field] || []).includes(e.id)).length })).filter((x) => x.count).sort((a, b) => b.count - a.count);
     const open = s.incidents.filter((i) => i.status === "OPEN");
+    // Indicador discreto do Bot: só ocorrências CONNECTIVITY abertas criadas pela
+    // integração (Telegram) — nenhuma escrita/regra operacional aqui, só leitura.
+    const botConnectivity = open.filter((i) => i.classification === "CONNECTIVITY" && i.origin === "TELEGRAM_BOT");
     return {
       metrics: {
         total: active.length,
@@ -26,7 +29,7 @@ export class DashboardService {
       locations: countBy(active, "locationId", (n) => name(s.locations, n.locationId)),
       clients: related("clientIds", s.clients),
       groups: related("groupIds", s.groups),
-      attention: { blocked: active.filter((n) => n.status === NUMBER_STATUSES.BLOCKED), review: active.filter((n) => n.status === NUMBER_STATUSES.UNDER_REVIEW), open },
+      attention: { blocked: active.filter((n) => n.status === NUMBER_STATUSES.BLOCKED), review: active.filter((n) => n.status === NUMBER_STATUSES.UNDER_REVIEW), open, botConnectivity },
       recent: {
         history: [...s.historyEvents].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 6),
         incidents: [...s.incidents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6),

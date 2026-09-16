@@ -28,7 +28,10 @@ export class SupabaseStateRepository {
       numbers:rows.numbers.map((row)=>camelNumber(row,(clientsByNumber[row.id]??[]).map((item)=>item.client_id),(squadsByNumber[row.id]??[]).map((item)=>item.squad_id),restrictionsByNumber[row.id]?.[0]?{kind:restrictionsByNumber[row.id][0].kind,description:restrictionsByNumber[row.id][0].description,recordedAt:restrictionsByNumber[row.id][0].recorded_at}:null)),
       campaigns:rows.campaigns.map((row)=>({id:row.id,name:row.name,clientId:row.client_id,squadId:row.squad_id,responsibleId:row.responsible_id,notes:row.notes,status:row.status,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
       numberCampaignLinks:rows.number_campaign_links.map((row)=>({id:row.id,numberId:row.number_id,campaignId:row.campaign_id,role:row.role,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
-      incidents:rows.incidents.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,title:row.title,description:row.description,status:row.status,responsibleId:row.responsible_id,resolutionNotes:row.resolution_notes,resolvedById:row.resolved_by_id,resolvedAt:row.resolved_at,createdAt:row.created_at,updatedAt:row.updated_at})),
+      // origin/classification/campaignId/integrationEventId são só LEITURA aqui (exibição) —
+      // nunca entram no mapeamento de escrita (sync/incidentRow), então um upsert feito pelo
+      // frontend nunca sobrescreve o que a integração (Telegram) gravou nessas colunas.
+      incidents:rows.incidents.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,title:row.title,description:row.description,status:row.status,responsibleId:row.responsible_id,resolutionNotes:row.resolution_notes,resolvedById:row.resolved_by_id,resolvedAt:row.resolved_at,createdAt:row.created_at,updatedAt:row.updated_at,origin:row.origin,classification:row.classification,campaignId:row.campaign_id,integrationEventId:row.integration_event_id})),
       historyEvents:rows.history_events.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,description:row.description,previousValue:row.previous_value,newValue:row.new_value,metadata:row.metadata,occurredAt:row.occurred_at})),
     };
     return new SupabaseStateRepository(client,state);

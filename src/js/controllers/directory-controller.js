@@ -2,6 +2,7 @@ import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDire
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
+import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
 
 const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador", locations: "Localização" };
 const typeLabels = { clients: "cliente", groups: "squad", responsibles: "colaborador", locations: "localização" };
@@ -12,7 +13,9 @@ export class DirectoryController {
   get state() { return this.service.numbersService.state; }
 
   render() {
-    this.content.innerHTML = renderDirectory(this.type, this.service.list(this.type, true), this.query, this.state.groups, this.state.responsibles);
+    const tabs = this.type === "locations" ? renderPageTabs(NUMBERS_SECTION_TABS, "locations") : "";
+    this.content.innerHTML = tabs + renderDirectory(this.type, this.service.list(this.type, true), this.query, this.state.groups, this.state.responsibles);
+    if (this.type === "locations") bindPageTabs(this.content, NUMBERS_SECTION_TABS);
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
     this.content.querySelector('[data-action="bulk-squad"]')?.addEventListener("click", () => this.openBulkSquad());
     this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.render(); });

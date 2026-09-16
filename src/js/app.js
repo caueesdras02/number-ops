@@ -18,6 +18,8 @@ import { CampaignsController } from "./controllers/campaigns-controller.js";
 import { ApprovedSpreadsheetMigrationService } from "./services/approved-spreadsheet-migration-service.js";
 import { TestDataCleanupService } from "./services/test-data-cleanup-service.js";
 import { getViewTitle, renderView } from "./ui/views.js";
+import { BotService } from "./services/bot-service.js";
+import { BotController } from "./controllers/bot-controller.js";
 import { createConfiguredSupabaseClient } from "./infra/supabase-client.js";
 import { SupabaseAuthRepository } from "./repositories/supabase-auth-repository.js";
 import { createSupabaseRepositories } from "./repositories/supabase-repository.js";
@@ -48,7 +50,7 @@ let auditLogController=null;
 let internalRoutesEnabled=false;
 new AboutController({trigger:document.querySelector("[data-about-open]")}).bind();
 
-function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null}={}) {
+function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null,integrationEventsRepository=null}={}) {
   const numbersService=new NumbersService(repository,{hardDeletePort});
   if(runLegacyMaintenance) {
     const migration=new ApprovedSpreadsheetMigrationService(numbersService).run();
@@ -69,19 +71,31 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     dashboard:new DashboardController({service:new DashboardService(numbersService),content}),
     guide:new GuideController({content}),
     backup:new BackupController({service:new BackupService(numbersService),content}),
+    // Central Number Ops Bot — leitura. Sem repository (modo local/offline) ela
+    // mesma mostra um estado "indisponível", sem quebrar a rota.
+    bot:new BotController({service:new BotService({repository:integrationEventsRepository,numbersService}),content}),
   };
 }
 
+// "Números" reúne, como abas (dentro dos próprios controllers — ver
+// NumbersController.render/DirectoryController.render), a lista de números
+// e a área de Localizações — ambas continuam sendo as mesmas telas/rotas de
+// sempre, só deixam de ocupar item próprio na sidebar. "locations" nunca
+// colide com um id real de número (createId sempre gera "number_<uuid>").
 function showView(viewName) {
   if(!controllers)return;
   const [view,resourceId]=viewName.split("/");
   if(view==="dashboard")controllers.dashboard.render();
-  else if(view==="numbers")resourceId?controllers.numbers.showDetail(resourceId):controllers.numbers.render();
+  else if(view==="numbers"&&resourceId==="locations")controllers.directories.locations.render();
+  else if(view==="numbers"&&resourceId)controllers.numbers.showDetail(resourceId);
+  else if(view==="numbers")controllers.numbers.render();
   else if(view==="campaigns")resourceId?controllers.campaigns.detail(resourceId):controllers.campaigns.render();
   else if(view==="profiles"&&profilesController)profilesController.render();
   else if(view==="activity"&&auditLogController)auditLogController.render();
   else if(view==="activity"){window.location.hash="#dashboard";return;}
+  else if(view==="bot")controllers.bot.render();
   else if(controllers.directories[view])controllers.directories[view].render();
+  else if(view==="incidents"&&resourceId)controllers.incidents.detail(resourceId);
   else if(view==="incidents")controllers.incidents.render();
   else if(view==="history")controllers.history.render();
   else if(view==="guide")controllers.guide.render();
@@ -151,7 +165,7 @@ async function bootstrap() {
   content.innerHTML='<section class="directory-empty"><div><h2>Carregando dados compartilhados…</h2><p>Sincronizando com o Supabase.</p></div></section>';
   const remoteRepository=await SupabaseStateRepository.create(supabase);
   const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
-  controllers=createOperationalControllers(remoteRepository,{hardDeletePort});
+  controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents});
   profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),content,currentProfile:authenticated.profile});
   if(isAdminOrAbove(authenticated.profile)) auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
   document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!isAdminOrAbove(authenticated.profile);});

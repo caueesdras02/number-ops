@@ -157,3 +157,21 @@
 :root[data-theme="dark"] .auth-brand-panel { background: linear-gradient(160deg, #0f2c24, #08201a); }
 :root[data-theme="dark"] .toast { background: var(--color-surface); }
 :root[data-theme="dark"] .password-toggle:hover { background: var(--color-primary-soft); }
+
+:root[data-theme="dark"] .bot-metric-total { --metric-ink: #c9d6cf; --metric-soft: #1b2622; }
+:root[data-theme="dark"] .bot-metric-matched { --metric-ink: #7ff0a6; --metric-soft: #123528; }
+:root[data-theme="dark"] .bot-metric-pending { --metric-ink: #f0cf7e; --metric-soft: #37300f; }
+:root[data-theme="dark"] .bot-metric-connectivity { --metric-ink: #ff9d9d; --metric-soft: #3a1d1d; }
+:root[data-theme="dark"] .bot-status-badge.is-ok { color: #7ff0a6; background: #123528; }
+:root[data-theme="dark"] .bot-status-badge.is-warning { color: #f0c79b; background: #33260f; }
+:root[data-theme="dark"] .bot-status-badge.is-error { color: #ff9d9d; background: #3a1d1d; }
+:root[data-theme="dark"] .bot-status-badge.is-pending,
+:root[data-theme="dark"] .bot-status-badge.is-muted { color: #a9bcb3; background: #223029; }
+:root[data-theme="dark"] .bot-pending-panel { color: #f0c79b; background: #2b2410; border-color: #4a3a1c; }
+:root[data-theme="dark"] .bot-pending-panel > div > span { color: #2b2410; background: #f0d9a0; }
+:root[data-theme="dark"] .bot-pending-panel strong { color: var(--color-text); }
+:root[data-theme="dark"] .bot-pending-panel p,
+:root[data-theme="dark"] .bot-pending-list li small,
+:root[data-theme="dark"] .bot-pending-more { color: #d8b98a; }
+:root[data-theme="dark"] .bot-pending-list li { border-top-color: rgb(240 217 160 / .16); }
+:root[data-theme="dark"] tr.is-pending-row { background: rgb(240 217 160 / .07); }

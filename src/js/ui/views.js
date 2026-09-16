@@ -9,6 +9,7 @@ const views = Object.freeze({
   activity: { title: "Registro de atividades", description: "Rastreabilidade das alterações realizadas no sistema." },
   guide: { title: "Boas práticas", description: "Esta área reunirá orientações operacionais organizadas para consulta da equipe." },
   backup: { title: "Dados e Backup", description: "Exporte ou restaure a base local do Number Ops." },
+  bot: { title: "Number Ops Bot", description: "" },
 });
 
 export function renderView(viewName) {

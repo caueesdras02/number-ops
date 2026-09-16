@@ -4,6 +4,7 @@ import { renderChangeRoleForm } from "../ui/campaigns-view.js";
 import { showToast } from '../ui/toast.js';
 import { guardedSubmit } from '../ui/form-submit-guard.js';
 import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
+import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
 
 export class NumbersController {
   constructor({ service, campaignsService, content }) {
@@ -17,7 +18,8 @@ export class NumbersController {
   }
 
   render() {
-    this.content.innerHTML = renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen, this.service.state.campaigns, this.service.state.numberCampaignLinks);
+    this.content.innerHTML = renderPageTabs(NUMBERS_SECTION_TABS, "numbers") + renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen, this.service.state.campaigns, this.service.state.numberCampaignLinks);
+    bindPageTabs(this.content, NUMBERS_SECTION_TABS);
     this.bindPageEvents();
   }
 
