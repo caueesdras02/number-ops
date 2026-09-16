@@ -1,1 +1,6 @@
 supabase/generated/
+# estado local do Supabase CLI (gerado por `supabase link`) — nunca versionar
+supabase/.temp/
+supabase/.branches/
+.env
+.env.local
