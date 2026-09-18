@@ -6,6 +6,9 @@ const levelOf = (value) => (typeof value === "string" ? value : value?.access_le
 
 export function isMaster(profileOrLevel) { return levelOf(profileOrLevel) === "MASTER"; }
 export function isAdminOrAbove(profileOrLevel) { const level = levelOf(profileOrLevel); return level === "MASTER" || level === "ADMIN"; }
+/** Qualquer nível operacional (MASTER/ADMIN/USER) — só VIEWER não pode. Mesmo tier de
+ * escrita já usado em numbers/campaigns/incidents; não inventa um cargo novo. */
+export function canOperate(profileOrLevel) { return levelOf(profileOrLevel) !== "VIEWER" && levelOf(profileOrLevel) !== ""; }
 export function canManageAccessLevel(profileOrLevel) { return isMaster(profileOrLevel); }
 export function canHardDelete(profileOrLevel) { return isMaster(profileOrLevel); }
 

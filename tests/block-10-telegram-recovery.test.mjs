@@ -26,6 +26,7 @@ function makeDeps({ numbers = {} } = {}) {
   let nextIncidentId = 1;
   return {
     inserted, incidents, historyEvents,
+    async findExternalNumberMatch() { return null; },
     async findNumberIdsByPhones(phones) {
       const ids = new Set();
       phones.forEach((phone) => (numbers[phone] ?? []).forEach((id) => ids.add(id)));

@@ -13,7 +13,7 @@ const fakeNumbersService = (state) => ({ state });
 
 // 1) available === false sem repository (modo local/offline) — não lança, não inventa dado.
 {
-  const service = new BotService({ repository: null, numbersService: fakeNumbersService({ numbers: [], campaigns: [], clients: [], incidents: [] }) });
+  const service = new BotService({ integrationEventsRepository: null, numbersService: fakeNumbersService({ numbers: [], campaigns: [], clients: [], incidents: [] }) });
   assert.equal(service.available, false);
   const result = await service.load();
   assert.equal(result.available, false);
@@ -29,7 +29,7 @@ const fakeNumbersService = (state) => ({ state });
     { id: "i3", classification: "CONNECTIVITY", origin: "MANUAL", status: "OPEN" }, // origem manual não conta
     { id: "i4", classification: "CONFIRMED_RESTRICTION", origin: "TELEGRAM_BOT", status: "OPEN" }, // classificação diferente não conta
   ] };
-  const service = new BotService({ repository: null, numbersService: fakeNumbersService(state) });
+  const service = new BotService({ integrationEventsRepository: null, numbersService: fakeNumbersService(state) });
   const result = await service.load();
   assert.equal(result.metrics.openConnectivity, 1);
 }
@@ -47,7 +47,7 @@ const fakeNumbersService = (state) => ({ state });
     { id: "evt2", source: "TELEGRAM", source_event_id: "2", event_type: "CONNECTIVITY_ALERT", phone_normalized: "5511900000000", number_id: null, campaign_id: null, client_id: null, matched_confidence: 0, processing_status: "PENDING_ASSOCIATION", linked_incident_id: null, error_message: null, metadata: {}, received_at: "2026-01-02T09:00:00.000Z", processed_at: "2026-01-02T09:00:01.000Z" },
     { id: "evt3", source: "TELEGRAM", source_event_id: "3", event_type: "UNKNOWN", phone_normalized: null, number_id: null, campaign_id: null, client_id: null, matched_confidence: null, processing_status: "IGNORED", linked_incident_id: null, error_message: null, metadata: {}, received_at: "2026-01-02T08:00:00.000Z", processed_at: "2026-01-02T08:00:01.000Z" },
   ];
-  const service = new BotService({ repository: { list: async () => rows }, numbersService: fakeNumbersService(state) });
+  const service = new BotService({ integrationEventsRepository: { list: async () => rows }, numbersService: fakeNumbersService(state) });
   const result = await service.load();
   assert.equal(result.available, true);
   assert.equal(result.events.length, 3);

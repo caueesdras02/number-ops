@@ -50,7 +50,7 @@ let auditLogController=null;
 let internalRoutesEnabled=false;
 new AboutController({trigger:document.querySelector("[data-about-open]")}).bind();
 
-function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null,integrationEventsRepository=null}={}) {
+function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null,integrationEventsRepository=null,externalNumbersRepository=null,incidentsRepository=null,historyEventsRepository=null,currentProfile=null}={}) {
   const numbersService=new NumbersService(repository,{hardDeletePort});
   if(runLegacyMaintenance) {
     const migration=new ApprovedSpreadsheetMigrationService(numbersService).run();
@@ -73,7 +73,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     backup:new BackupController({service:new BackupService(numbersService),content}),
     // Central Number Ops Bot — leitura. Sem repository (modo local/offline) ela
     // mesma mostra um estado "indisponível", sem quebrar a rota.
-    bot:new BotController({service:new BotService({repository:integrationEventsRepository,numbersService}),content}),
+    bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,numbersService,currentProfile}),content}),
   };
 }
 
@@ -165,7 +165,7 @@ async function bootstrap() {
   content.innerHTML='<section class="directory-empty"><div><h2>Carregando dados compartilhados…</h2><p>Sincronizando com o Supabase.</p></div></section>';
   const remoteRepository=await SupabaseStateRepository.create(supabase);
   const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
-  controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents});
+  controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents,externalNumbersRepository:repositories.externalNumbers,incidentsRepository:repositories.incidents,historyEventsRepository:repositories.historyEvents,currentProfile:authenticated.profile});
   profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),content,currentProfile:authenticated.profile});
   if(isAdminOrAbove(authenticated.profile)) auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
   document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!isAdminOrAbove(authenticated.profile);});

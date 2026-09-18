@@ -5,7 +5,7 @@ const BOT_ART = "./src/assets/number-ops-bot-logo.jpeg";
 const date = (value) => (value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
 const phoneLabel = (digits) => (digits && (digits.length === 12 || digits.length === 13) ? formatPhone(digits) : (digits ? escapeHtml(digits) : "—"));
 
-const statusClass = { RECEIVED: "is-pending", MATCHED: "is-ok", LINKED_TO_INCIDENT: "is-ok", PENDING_ASSOCIATION: "is-warning", IGNORED: "is-muted", ERROR: "is-error" };
+const statusClass = { RECEIVED: "is-pending", MATCHED: "is-ok", LINKED_TO_INCIDENT: "is-ok", PENDING_ASSOCIATION: "is-warning", IGNORED: "is-muted", IGNORED_NOT_OWNED: "is-muted", ERROR: "is-error" };
 const statusBadge = (processingStatus) => `<span class="bot-status-badge ${statusClass[processingStatus] ?? "is-muted"}">${escapeHtml(PROCESSING_STATUS_LABELS[processingStatus] ?? processingStatus)}</span>`;
 
 const numberCell = (event) => event.number
@@ -94,12 +94,52 @@ function timelineStep({ done, icon, title, description }) {
   return `<li class="${done ? "is-done" : "is-pending"}"><span class="detail-event-icon">${done ? "✓" : icon}</span><div><strong>${title}</strong><p>${description}</p></div></li>`;
 }
 
-export function renderBotEventDetail(event) {
+function notOwnedNote(event) {
+  if (event.processingStatus !== "IGNORED_NOT_OWNED") return "";
+  const info = event.metadata?.notOwned;
+  const line = info?.auto
+    ? "Ignorado automaticamente — este telefone já havia sido classificado como não pertencente à operação."
+    : `Classificado manualmente como não pertence à operação${info?.classifiedAt ? ` em ${date(info.classifiedAt)}` : ""}.`;
+  const record = event.externalRecord;
+  const revertedLine = record?.reverted_at ? `<p class="bot-muted">Classificação de externo revertida em ${date(record.reverted_at)} — novos alertas deste telefone voltam a ficar pendentes de associação.</p>` : "";
+  return `<div class="bot-detail-note bot-notowned-note"><p>${line}</p>${revertedLine}</div>`;
+}
+
+function numberPickerRow(number) {
+  const label = `${formatPhone(number.phone)}${number.identification ? ` · ${escapeHtml(number.identification)}` : ""}`;
+  return `<label class="check-option link-role-row" data-relation-option><span class="link-role-check"><input type="radio" name="numberId" value="${number.id}" required><span>${label}</span></span></label>`;
+}
+
+function pendingActions(event, { canModify, availableNumbers }) {
+  if (event.processingStatus !== "PENDING_ASSOCIATION" || !canModify) return "";
+  const rows = availableNumbers.map(numberPickerRow).join("");
+  return `<div class="bot-detail-actions">
+    <details class="bot-associate-details">
+      <summary class="button button-primary">Associar número</summary>
+      <form class="number-form bot-associate-form" data-bot-associate-form data-id="${event.id}">
+        <label class="form-full">Buscar número já cadastrado<input class="input" type="search" data-link-search placeholder="Buscar por telefone ou identificação" autocomplete="off"></label>
+        <fieldset class="link-role-list" data-link-options>${rows || '<p class="table-secondary">Nenhum número cadastrado disponível.</p>'}</fieldset>
+        <p class="relation-empty-hint" data-link-empty hidden>Nenhum número encontrado.</p>
+        <small class="form-hint">Somente números já cadastrados podem ser selecionados — nenhum número é criado automaticamente.</small>
+        <div class="form-actions"><button class="button button-primary" type="submit">Confirmar associação</button></div>
+      </form>
+    </details>
+    <button class="button button-quiet" type="button" data-action="bot-mark-not-owned" data-id="${event.id}">Não pertence à operação</button>
+  </div>`;
+}
+
+function revertAction(event, { canModify }) {
+  const record = event.externalRecord;
+  if (event.processingStatus !== "IGNORED_NOT_OWNED" || !canModify || !record || record.reverted_at) return "";
+  return `<div class="bot-detail-actions"><button class="button button-quiet" type="button" data-action="bot-revert-not-owned" data-external-id="${record.id}">Reverter classificação de externo</button></div>`;
+}
+
+export function renderBotEventDetail(event, { canModify = false, availableNumbers = [] } = {}) {
   const campaignNote = !event.numberId ? "Não aplicável — número não foi encontrado." : event.metadata?.campaignMatch === "ambiguous" ? "Ambíguo entre mais de uma campanha ativa — não associado automaticamente." : event.metadata?.campaignMatch === "none" ? "Número sem campanha ativa vinculada." : "Ainda não associada.";
   const steps = [
     timelineStep({ done: true, icon: "1", title: "Recebido", description: `Evento recebido via Telegram em ${date(event.receivedAt)}.` }),
     timelineStep({ done: event.eventType !== "UNKNOWN", icon: "2", title: "Interpretado", description: event.eventType !== "UNKNOWN" ? `Reconhecido como ${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}.` : (event.errorMessage ? escapeHtml(event.errorMessage) : "Mensagem não reconhecida como alerta de conectividade.") }),
-    timelineStep({ done: Boolean(event.numberId), icon: "3", title: "Número", description: event.numberId ? `Associado a ${formatPhone(event.number?.phone ?? event.phoneNormalized)}.` : (event.phoneNormalized ? `Nenhum número encontrado para ${phoneLabel(event.phoneNormalized)}.` : "Telefone não identificado no texto do alerta.") }),
+    timelineStep({ done: Boolean(event.numberId) || event.processingStatus === "IGNORED_NOT_OWNED", icon: "3", title: "Número", description: event.numberId ? `Associado a ${formatPhone(event.number?.phone ?? event.phoneNormalized)}.` : event.processingStatus === "IGNORED_NOT_OWNED" ? `${phoneLabel(event.phoneNormalized)} não pertence à operação.` : (event.phoneNormalized ? `Nenhum número encontrado para ${phoneLabel(event.phoneNormalized)}.` : "Telefone não identificado no texto do alerta.") }),
     timelineStep({ done: Boolean(event.campaignId), icon: "4", title: "Campanha", description: event.campaignId ? `Associada a ${escapeHtml(event.campaign?.name ?? event.campaignId)}.` : campaignNote }),
     timelineStep({ done: Boolean(event.incident?.classification), icon: "5", title: "Classificação", description: event.incident?.classification ? escapeHtml(CLASSIFICATION_LABELS[event.incident.classification] ?? event.incident.classification) : "Ainda não classificado." }),
     timelineStep({ done: Boolean(event.linkedIncidentId), icon: "6", title: "Ocorrência", description: event.linkedIncidentId ? "Acompanhamento criado/atualizado em Ocorrências." : "Nenhum acompanhamento vinculado." }),
@@ -110,5 +150,5 @@ export function renderBotEventDetail(event) {
   if (event.campaignId) links.push(`<button class="button button-quiet" type="button" data-action="open-campaign" data-id="${event.campaignId}">Ver campanha</button>`);
   if (event.linkedIncidentId) links.push(`<button class="button button-quiet" type="button" data-action="open-incident" data-id="${event.linkedIncidentId}">Ver ocorrência</button>`);
 
-  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}</article></div>`;
+  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${notOwnedNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${revertAction(event, { canModify })}</article></div>`;
 }

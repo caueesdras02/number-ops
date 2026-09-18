@@ -6,7 +6,9 @@
 // numbers.status, restriction, utilização ou number_campaign_links. Escreve
 // em integration_events (sempre) e, quando um CONNECTIVITY_ALERT resolve
 // number_id, também em incidents (acompanhamento) e history_events — nunca
-// uma ação operacional automática.
+// uma ação operacional automática. Lê (nunca escreve) external_numbers —
+// a memória de telefones "não pertence à operação" só é escrita pelo
+// frontend (ação humana), nunca por esta função.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { handleTelegramWebhook } from "./handler.js";
 
@@ -36,6 +38,19 @@ const deps = {
     const { data, error } = await supabase.from("numbers").select("id").in("phone", phones);
     if (error) throw error;
     return [...new Set((data ?? []).map((row) => row.id))];
+  },
+  async findExternalNumberMatch(phones) {
+    if (!phones.length) return null;
+    // Mesma regra: match exato contra os candidatos determinísticos, só entre
+    // classificações ATIVAS (reverted_at nulo) — nunca LIKE/substring.
+    const { data, error } = await supabase
+      .from("external_numbers")
+      .select("id")
+      .in("phone_normalized", phones)
+      .is("reverted_at", null)
+      .limit(1);
+    if (error) throw error;
+    return data?.[0] ?? null;
   },
   async findActiveCampaignIdsForNumber(numberId) {
     const { data, error } = await supabase

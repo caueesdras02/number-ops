@@ -40,6 +40,7 @@ function normalizeLabel(value) {
  *   findIncidentByIntegrationEventId: (integrationEventId: string) => Promise<{id:string}|null>,
  *   findOpenConnectivityIncident: (numberId: string) => Promise<{id:string}|null>,
  *   resolveIncident: (incidentId: string) => Promise<{ data: boolean, error: null|{message:string} }>,
+ *   findExternalNumberMatch: (phones: string[]) => Promise<{id:string}|null>,
  * }} params.deps
  */
 export async function handleTelegramWebhook({ getHeader, rawBody, env, deps }) {
@@ -141,10 +142,25 @@ export async function handleTelegramWebhook({ getHeader, rawBody, env, deps }) {
           } else {
             metadata.campaignMatch = "none";
           }
+        } else if (numberIds.length === 0) {
+          // Não é nosso número — antes de cair em PENDING_ASSOCIATION, verifica a
+          // memória de números externos (telefones já classificados manualmente
+          // como "não pertence à operação"). Match exato contra os MESMOS
+          // candidatos determinísticos (nunca LIKE/substring). Se o telefone for
+          // cadastrado oficialmente em `numbers` depois, o bloco acima (match
+          // exato em numbers) sempre roda primeiro e tem prioridade.
+          const externalMatch = await deps.findExternalNumberMatch(candidates);
+          matchedConfidence = 0;
+          if (externalMatch) {
+            processingStatus = "IGNORED_NOT_OWNED";
+            metadata.notOwned = { reason: "NUMBER_NOT_OWNED", externalNumberId: externalMatch.id, auto: true };
+          } else {
+            processingStatus = "PENDING_ASSOCIATION";
+          }
         } else {
-          // 0 (nenhum candidato bateu) ou >1 (mais de uma forma do telefone bateu com
-          // registros DISTINTOS — não deveria ocorrer, `numbers.phone` é único por linha;
-          // tratado aqui como "sem match confiável", nunca escolhendo um dos dois arbitrariamente).
+          // >1: mais de uma forma do telefone bateu com registros DISTINTOS —
+          // não deveria ocorrer, `numbers.phone` é único por linha; tratado
+          // como "sem match confiável", nunca escolhendo um dos dois arbitrariamente.
           matchedConfidence = 0;
           processingStatus = "PENDING_ASSOCIATION";
         }

@@ -9,7 +9,7 @@ import { handleTelegramWebhook } from "../supabase/functions/telegram-webhook/ha
 const ENV = { webhookSecret: "test-secret-123", allowedChatId: "-1009999" };
 const CHAT = { id: -1009999 };
 
-function makeDeps({ numbers = {}, links = {}, campaigns = {} } = {}) {
+function makeDeps({ numbers = {}, links = {}, campaigns = {}, externalNumbers = {} } = {}) {
   const inserted = [];
   const incidents = [];
   const historyEvents = [];
@@ -21,6 +21,10 @@ function makeDeps({ numbers = {}, links = {}, campaigns = {} } = {}) {
       const ids = new Set();
       phones.forEach((phone) => (numbers[phone] ?? []).forEach((id) => ids.add(id)));
       return [...ids];
+    },
+    async findExternalNumberMatch(phones) {
+      for (const phone of phones) if (externalNumbers[phone]) return { id: externalNumbers[phone] };
+      return null;
     },
     async findActiveCampaignIdsForNumber(numberId) { return links[numberId] ?? []; },
     async getCampaignsByIds(ids) { return ids.map((id) => campaigns[id]).filter(Boolean); },
@@ -243,6 +247,45 @@ const okHeaders = headersOf({ "x-telegram-bot-api-secret-token": ENV.webhookSecr
   const result = await handleTelegramWebhook({ getHeader: okHeaders, rawBody: updateWith({ text: "Status: DESCONECTADO\nNúmero: 81900000000" }), env: ENV, deps });
   assert.equal(deps.inserted[0].processing_status, "PENDING_ASSOCIATION");
   assert.equal(deps.inserted[0].number_id, null);
+}
+
+// 14) telefone já classificado como "não pertence à operação" (memória de externos) =>
+// ignorado automaticamente, nunca vira PENDING_ASSOCIATION, número nunca é criado.
+{
+  const deps = makeDeps({ numbers: {}, externalNumbers: { "5511900000001": "external-1" } });
+  const result = await handleTelegramWebhook({ getHeader: okHeaders, rawBody: updateWith({ text: "Status: DESCONECTADO\nNúmero: 5511900000001" }), env: ENV, deps });
+  assert.equal(result.status, 200);
+  assert.equal(deps.inserted[0].processing_status, "IGNORED_NOT_OWNED");
+  assert.equal(deps.inserted[0].number_id, null);
+  assert.equal(deps.inserted[0].matched_confidence, 0);
+  assert.deepEqual(deps.inserted[0].metadata.notOwned, { reason: "NUMBER_NOT_OWNED", externalNumberId: "external-1", auto: true });
+}
+
+// 15) mesmo telefone externo, formatado com +55/parênteses/hífen (formas equivalentes) =>
+// também reconhecido automaticamente (mesma normalização de brazilianPhoneCandidates).
+{
+  const deps = makeDeps({ numbers: {}, externalNumbers: { "5511900000002": "external-2" } });
+  const result = await handleTelegramWebhook({ getHeader: okHeaders, rawBody: updateWith({ text: "Status: DESCONECTADO\nNúmero: +55 (11) 90000-0002" }), env: ENV, deps });
+  assert.equal(result.status, 200);
+  assert.equal(deps.inserted[0].processing_status, "IGNORED_NOT_OWNED");
+}
+
+// 16) telefone externo SEM o "55" no texto do alerta => ainda reconhecido (candidatos
+// determinísticos com/sem código do país, igual ao match de numbers).
+{
+  const deps = makeDeps({ numbers: {}, externalNumbers: { "5511900000003": "external-3" } });
+  const result = await handleTelegramWebhook({ getHeader: okHeaders, rawBody: updateWith({ text: "Status: DESCONECTADO\nNúmero: 11900000003" }), env: ENV, deps });
+  assert.equal(deps.inserted[0].processing_status, "IGNORED_NOT_OWNED");
+}
+
+// 17) prioridade: telefone existe em `numbers` E também está (por engano/legado) na
+// memória de externos => `numbers` sempre ganha (MATCHED), memória de externos nunca é
+// consultada nesse caso.
+{
+  const deps = makeDeps({ numbers: { "5511900000004": ["num-priority"] }, externalNumbers: { "5511900000004": "external-4" } });
+  const result = await handleTelegramWebhook({ getHeader: okHeaders, rawBody: updateWith({ text: "Status: DESCONECTADO\nNúmero: 5511900000004" }), env: ENV, deps });
+  assert.equal(deps.inserted[0].number_id, "num-priority");
+  assert.notEqual(deps.inserted[0].processing_status, "IGNORED_NOT_OWNED");
 }
 
 console.log("Bloco 1 (handler Telegram): todos os cenários passaram.");
