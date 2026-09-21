@@ -1,0 +1,14 @@
+{
+  "name": "Number Ops",
+  "short_name": "Number Ops",
+  "description": "Gerenciamento operacional de números utilizados nas campanhas da Live Shop Turbo.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0b1f18",
+  "theme_color": "#0b1f18",
+  "icons": [
+    { "src": "./src/assets/number-ops.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any" },
+    { "src": "./src/assets/number-ops.png", "sizes": "1254x1254", "type": "image/png", "purpose": "maskable" }
+  ]
+}

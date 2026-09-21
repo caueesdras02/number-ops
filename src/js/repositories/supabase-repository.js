@@ -22,4 +22,5 @@ export const createSupabaseRepositories = (client) => Object.freeze({
   auditLogs: new SupabaseRepository(client, "audit_logs"),
   integrationEvents: new SupabaseRepository(client, "integration_events"),
   externalNumbers: new SupabaseRepository(client, "external_numbers"),
+  pushSubscriptions: new SupabaseRepository(client, "push_subscriptions"),
 });

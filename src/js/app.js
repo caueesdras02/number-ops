@@ -32,6 +32,9 @@ import { AuditLogController } from "./controllers/audit-log-controller.js";
 import { AboutController } from "./controllers/about-controller.js";
 import { ACCESS_LEVEL_LABELS, isAdminOrAbove, isMaster } from "./models/access.js";
 import { initTheme, bindThemeToggles } from "./ui/theme-toggle.js";
+import { PushService } from "./services/push-service.js";
+import { bindPushToggle } from "./ui/push-toggle.js";
+import { VAPID_PUBLIC_KEY } from "./config/supabase-runtime.js";
 
 initTheme();
 bindThemeToggles();
@@ -75,6 +78,25 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     // mesma mostra um estado "indisponível", sem quebrar a rota.
     bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,numbersService,currentProfile}),content}),
   };
+}
+
+// Notificação push ("número caiu") — registra o service worker e liga o botão do topbar
+// só depois de autenticado (a inscrição é vinculada ao profile). Se o navegador não suportar
+// (ou o registro falhar), PushService.available fica false e o botão continua escondido —
+// nunca quebra o resto do app.
+async function initPush(repository,profileId) {
+  let registration=null;
+  try{ if("serviceWorker" in navigator) registration=await navigator.serviceWorker.register("./service-worker.js"); }
+  catch{ registration=null; }
+  const pushService=new PushService({
+    pushManager:registration?.pushManager??null,
+    requestPermission:typeof Notification!=="undefined"?()=>Notification.requestPermission():null,
+    repository,
+    profileId,
+    vapidPublicKey:VAPID_PUBLIC_KEY,
+    userAgent:navigator.userAgent,
+  });
+  bindPushToggle(pushService);
 }
 
 // "Números" reúne, como abas (dentro dos próprios controllers — ver
@@ -177,6 +199,7 @@ async function bootstrap() {
   logoutButton.before(profileLabel);
   authController.bindLogout(logoutButton);
   internalRoutesEnabled=true;
+  initPush(repositories.pushSubscriptions,authenticated.profile.id).catch(()=>{ /* notificação nunca pode travar o resto do app */ });
   showView(currentView());
   updateStickyHeader();
   bindThemeToggles();
