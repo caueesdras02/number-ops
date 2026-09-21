@@ -12,6 +12,15 @@
 .auth-theme-toggle { position: fixed; top: 16px; right: 16px; z-index: 5; }
 @media (max-width: 480px) { .auth-theme-toggle { top: 10px; right: 10px; } }
 
+/* Sino de push bloqueado no navegador — mesmo tamanho, só um aviso visual discreto (sem pedir de novo). */
+.theme-toggle.is-blocked { color: var(--color-muted); border-color: var(--color-border); }
+
+/* Ícone informativo ao lado do sino — nunca ativa/desativa notificação, só explica via toast
+   (ver ui/push-toggle.js). Menor que o sino, mesma família visual do theme-toggle. */
+.push-info { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: 0 0 auto; margin-left: -6px; border: none; border-radius: 50%; color: var(--color-muted); background: transparent; cursor: pointer; font-size: .9rem; line-height: 1; transition: color var(--duration-fast), background var(--duration-fast); }
+.push-info:hover { color: var(--color-primary-deep); background: var(--color-surface-muted); }
+@media (max-width: 700px) { .push-info { width: 22px; height: 22px; font-size: .8rem; } }
+
 /* Logo Live Shop Turbo tem texto claro — em superfície clara vai sobre um fundo escuro. */
 .auth-mobile-brand img { padding: 12px 16px; border-radius: 14px; background: var(--color-sidebar); }
 :root[data-theme="dark"] .auth-mobile-brand img { background: transparent; padding: 0; }
@@ -77,6 +86,21 @@
 .hard-delete-list { margin: 8px 0; padding-left: 20px; color: var(--color-text); font-size: .84rem; }
 .hard-delete-confirm-label { display: grid; gap: 6px; margin-top: 6px; font-size: .84rem; font-weight: 700; }
 
+/* Modal de confirmação customizado (substitui window.confirm()/alert()/prompt()) */
+.confirm-dialog-card { width: min(440px, 100%); padding: 28px 26px 24px; text-align: center; animation: confirm-dialog-in var(--duration-base) var(--ease-out); }
+.confirm-dialog-icon { display: inline-grid; place-items: center; width: 44px; height: 44px; margin-bottom: 14px; border-radius: 50%; color: #8a5a00; background: #fff5dc; font-size: 1.3rem; font-weight: 900; }
+.confirm-dialog-card h2 { margin-bottom: 10px; font-size: 1.2rem; letter-spacing: -.02em; }
+.confirm-dialog-body p { color: var(--color-muted); font-size: .88rem; line-height: 1.5; }
+.confirm-dialog-body p + p { margin-top: 6px; }
+.confirm-dialog-body .confirm-dialog-phone { margin: 2px 0; color: var(--color-text); font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em; }
+.confirm-dialog-note { margin-top: 16px; text-align: left; }
+.confirm-dialog-actions { display: flex; gap: 10px; margin-top: 20px; }
+.confirm-dialog-actions .button { flex: 1; justify-content: center; }
+.confirm-dialog-backdrop.is-closing { animation: none; opacity: 0; transition: opacity 160ms var(--ease-out); }
+.confirm-dialog-backdrop.is-closing .confirm-dialog-card { animation: none; transform: scale(.96); transition: transform 160ms var(--ease-out); }
+@keyframes confirm-dialog-in { from { opacity: 0; transform: scale(.96) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@media (max-width: 480px) { .confirm-dialog-card { padding: 24px 18px 20px; } .confirm-dialog-actions { flex-direction: column-reverse; } }
+
 /* Dashboard: 7 KPIs (inclui "Em uso") */
 .metric-grid-polished { grid-template-columns: 1.3fr repeat(6, minmax(115px, 1fr)); }
 .metric-inuse { --metric-color: #2f8fbf; --metric-ink: #0f4c70; --metric-soft: #e0f3fd; }
@@ -95,7 +119,8 @@
 
 :root[data-theme="dark"] .status-active,
 :root[data-theme="dark"] .utilization.is-available { color: #7ff0a6; background: #123528; }
-:root[data-theme="dark"] .status-warming { color: #f0cf7e; background: #37300f; }
+:root[data-theme="dark"] .status-warming,
+:root[data-theme="dark"] .confirm-dialog-icon { color: #f0cf7e; background: #37300f; }
 :root[data-theme="dark"] .status-under_review,
 :root[data-theme="dark"] .utilization.is-in-use { color: #86ccf0; background: #10303f; }
 :root[data-theme="dark"] .status-blocked { color: #ff9d9d; background: #3a1d1d; }

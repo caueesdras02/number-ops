@@ -1,6 +1,9 @@
 const region = () => document.querySelector('.toast-region');
 export function showToast(message, type = 'info', duration = 3600) {
+  const existing = [...(region()?.children ?? [])].find((node) => !node.classList.contains('is-leaving') && node.dataset.toastMessage === message);
+  if (existing) return; // mesma mensagem já visível — não empilha duplicata
   const toast = document.createElement('div');
+  toast.dataset.toastMessage = message;
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const text = document.createElement('span');

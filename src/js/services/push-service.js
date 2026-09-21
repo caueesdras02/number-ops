@@ -15,9 +15,14 @@ export function urlBase64ToUint8Array(base64String) {
 }
 
 export class PushService {
-  constructor({ pushManager = null, requestPermission = null, repository = null, profileId = null, vapidPublicKey = "", userAgent = "" } = {}) {
+  constructor({ pushManager = null, requestPermission = null, getPermission = null, repository = null, profileId = null, vapidPublicKey = "", userAgent = "" } = {}) {
     this.pushManager = pushManager;
     this.requestPermission = requestPermission;
+    // Opcional: lê o estado ATUAL da permissão (Notification.permission) sem precisar pedir de
+    // novo — distingue "nunca perguntou" (default) de "usuário bloqueou" (denied), que exigem
+    // tratamentos de UI bem diferentes (ver push-toggle.js). Sem isso injetado, status() só
+    // enxerga unsupported/subscribed/unsubscribed, como antes.
+    this.getPermission = getPermission;
     this.repository = repository;
     this.profileId = profileId;
     this.vapidPublicKey = vapidPublicKey;
@@ -29,8 +34,12 @@ export class PushService {
     return Boolean(this.pushManager && this.requestPermission && this.repository && this.profileId && this.vapidPublicKey);
   }
 
+  /** "unsupported" | "denied" | "subscribed" | "unsubscribed" (cobre tanto "default", nunca
+   * perguntado, quanto "granted" sem inscrição ativa — os dois são igualmente acionáveis: um
+   * clique chama subscribe() e funciona sem reabrir o prompt nativo). */
   async status() {
     if (!this.pushManager) return "unsupported";
+    if (this.getPermission?.() === "denied") return "denied";
     const existing = await this.pushManager.getSubscription();
     return existing ? "subscribed" : "unsubscribed";
   }
@@ -38,6 +47,7 @@ export class PushService {
   async subscribe() {
     if (!this.available) throw new Error("Notificações não estão disponíveis neste modo.");
     const permission = await this.requestPermission();
+    if (permission === "denied") throw new Error("As notificações estão bloqueadas nas configurações do navegador para este site. Permita notificações no navegador e tente novamente.");
     if (permission !== "granted") throw new Error("Permissão de notificação não concedida.");
 
     const subscription = await this.pushManager.subscribe({

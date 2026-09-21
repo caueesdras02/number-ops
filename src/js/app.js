@@ -91,6 +91,7 @@ async function initPush(repository,profileId) {
   const pushService=new PushService({
     pushManager:registration?.pushManager??null,
     requestPermission:typeof Notification!=="undefined"?()=>Notification.requestPermission():null,
+    getPermission:typeof Notification!=="undefined"?()=>Notification.permission:null,
     repository,
     profileId,
     vapidPublicKey:VAPID_PUBLIC_KEY,

@@ -2,6 +2,8 @@ import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDire
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
+import { confirmDialog } from "../ui/confirm-dialog.js";
+import { escapeHtml } from "../ui/number-presentation.js";
 import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
 
 const labels = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador", locations: "Localização" };
@@ -45,7 +47,14 @@ export class DirectoryController {
     this.content.querySelectorAll('[data-action="open-number"]').forEach((button) => button.addEventListener("click", () => { window.location.hash = `#numbers/${button.dataset.id}`; }));
     this.content.querySelectorAll('[data-action="open-campaign"]').forEach((button) => button.addEventListener("click", () => { window.location.hash = `#campaigns/${button.dataset.id}`; }));
     this.content.querySelectorAll('[data-action="close-campaign"]').forEach((button) => button.addEventListener("click", async () => {
-      if (!window.confirm("Finalizar esta campanha? Os vínculos ativos serão encerrados e o histórico será preservado.")) return;
+      const confirmed = await confirmDialog(this.content, {
+        icon: "!",
+        title: "Finalizar esta campanha?",
+        bodyHtml: `<p>Os vínculos ativos serão encerrados e o histórico será preservado.</p>`,
+        confirmLabel: "Finalizar campanha",
+        tone: "danger",
+      });
+      if (!confirmed) return;
       this.campaignsService.close(button.dataset.id);
       try { await this.campaignsService.flush(); } catch(error) { showToast(error.message,"error"); return; }
       showToast("Campanha finalizada.", "warning");
@@ -55,7 +64,15 @@ export class DirectoryController {
 
   async archive(id) {
     const label = labels[this.type];
-    if (!window.confirm(`Arquivar este ${label.toLocaleLowerCase("pt-BR")}? Ele continuará preservado na base.`)) return;
+    const item = this.service.get(this.type, id);
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: `Arquivar este ${label.toLocaleLowerCase("pt-BR")}?`,
+      bodyHtml: `<p>Ele continuará preservado na base.</p>${item ? `<p class="confirm-dialog-phone">${escapeHtml(item.name)}</p>` : ""}`,
+      confirmLabel: `Arquivar ${label.toLocaleLowerCase("pt-BR")}`,
+      tone: "danger",
+    });
+    if (!confirmed) return;
     this.service.archive(this.type, id);
     try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast(`${label} arquivado.`, "warning");

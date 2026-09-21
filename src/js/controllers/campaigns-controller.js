@@ -3,9 +3,47 @@ import { openStageMenu, closeActiveStageMenu, isStageMenuOpenFor } from "../ui/s
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
+import { confirmDialog } from "../ui/confirm-dialog.js";
 import { canOperate } from "../models/access.js";
 export class CampaignsController {
   constructor({ service, content, currentProfile = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; }
+  // Diálogos reaproveitados nos 2-3 pontos que disparam a mesma ação (lista, detalhe, seletor de
+  // Situação) — um só lugar pra manter o texto, nunca duplicado por cópia-e-cola.
+  confirmCloseCampaign() {
+    return confirmDialog(this.content, {
+      icon: "!",
+      title: "Encerrar esta campanha?",
+      bodyHtml: `<p>Os vínculos ativos com números serão encerrados e o histórico será preservado.</p>`,
+      confirmLabel: "Encerrar campanha",
+      tone: "danger",
+    });
+  }
+  confirmReactivateCampaign() {
+    return confirmDialog(this.content, {
+      icon: "!",
+      title: "Reativar esta campanha?",
+      bodyHtml: `<p>Ela voltará a ficar disponível para novos vínculos de número.</p>`,
+      confirmLabel: "Reativar campanha",
+      tone: "primary",
+    });
+  }
+  confirmEndLink() {
+    return confirmDialog(this.content, {
+      icon: "!",
+      title: "Encerrar este vínculo?",
+      bodyHtml: `<p>O histórico será preservado — o número continua consultável depois.</p>`,
+      confirmLabel: "Encerrar vínculo",
+      tone: "danger",
+    });
+  }
+  /** Um único filtro de Situação na UI (Captação / Tá rolando·Pós live / Encerrada) mapeado
+   * pros dois filtros internos que o service ainda trata separado (status/stage) — não duplica
+   * o conceito pro usuário, só traduz pra dentro. */
+  applySituacaoFilter(value) {
+    if (value === "ENCERRADA") { this.filters.status = "CLOSED"; this.filters.stage = ""; }
+    else if (value) { this.filters.status = "ACTIVE"; this.filters.stage = value; }
+    else { this.filters.status = ""; this.filters.stage = ""; }
+  }
   // Sem profile (modo local/offline, sem Supabase) = acesso total, igual ao resto do app nesse
   // modo (não passa por RLS nem pelo `data-access-level` do app-shell). Só restringe quando existe
   // um profile autenticado E ele é VIEWER.
@@ -15,19 +53,18 @@ export class CampaignsController {
     this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,responsibles:state.responsibles,filters:this.filters,gaps:this.service.findClientCampaignGaps(),canEdit:this.canEdit});
     this.content.querySelector('[data-action="add"]')?.addEventListener("click",()=>this.openForm());
     this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.render();});
-    this.content.querySelector('[data-action="status"]')?.addEventListener("change",(event)=>{this.filters.status=event.target.value;this.render();});
-    this.content.querySelector('[data-action="stage-filter"]')?.addEventListener("change",(event)=>{this.filters.stage=event.target.value;this.render();});
+    this.content.querySelector('[data-action="situacao-filter"]')?.addEventListener("change",(event)=>{this.applySituacaoFilter(event.target.value);this.render();});
     this.bindStageTriggers();
     this.content.querySelectorAll('[data-action="view"]').forEach((button)=>button.addEventListener("click",()=>this.detail(button.dataset.id)));
     this.content.querySelectorAll('[data-action="edit"]').forEach((button)=>button.addEventListener("click",()=>this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button)=>button.addEventListener("click",()=>this.hardDelete(button.dataset.id)));
     this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;}));
     this.content.querySelectorAll('[data-action="close"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!confirm("Encerrar esta campanha?"))return;
+      if(!(await this.confirmCloseCampaign()))return;
       try{this.service.close(button.dataset.id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
     }));
     this.content.querySelectorAll('[data-action="reactivate"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!confirm("Reativar esta campanha? Ela voltará a ficar disponível para novos vínculos."))return;
+      if(!(await this.confirmReactivateCampaign()))return;
       try{this.service.reactivate(button.dataset.id);await this.service.flush();showToast("Campanha reativada.","success");this.render();}catch(error){showToast(error.message,"error");}
     }));
   }
@@ -56,7 +93,7 @@ export class CampaignsController {
   async handleStageSelect(id,value,onDetail) {
     try{
       if(value==="ENCERRADA"){
-        if(!confirm("Encerrar esta campanha?"))return;
+        if(!(await this.confirmCloseCampaign()))return;
         this.service.close(id);
         await this.service.flush();
         showToast("Campanha encerrada.","warning");
@@ -76,15 +113,15 @@ export class CampaignsController {
     this.content.querySelector('[data-action="add-links"]')?.addEventListener("click",()=>this.openLinkForm(id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener("click",()=>this.hardDelete(id,true));
     this.content.querySelector('[data-action="close"]')?.addEventListener("click",async()=>{
-      if(!confirm("Encerrar esta campanha?"))return;
+      if(!(await this.confirmCloseCampaign()))return;
       try{this.service.close(id);await this.service.flush();showToast("Campanha encerrada.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
     });
     this.content.querySelector('[data-action="reactivate"]')?.addEventListener("click",async()=>{
-      if(!confirm("Reativar esta campanha? Ela voltará a ficar disponível para novos vínculos."))return;
+      if(!(await this.confirmReactivateCampaign()))return;
       try{this.service.reactivate(id);await this.service.flush();showToast("Campanha reativada.","success");this.detail(id);}catch(error){showToast(error.message,"error");}
     });
     this.content.querySelectorAll('[data-action="end-link"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!confirm("Encerrar este vínculo? O histórico será preservado."))return;
+      if(!(await this.confirmEndLink()))return;
       try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
     }));
     this.content.querySelectorAll('[data-action="change-role"]').forEach((button)=>button.addEventListener("click",()=>this.openChangeRoleForm(id,button.dataset.numberId,button.dataset.role)));
@@ -125,7 +162,7 @@ export class CampaignsController {
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     this.content.querySelector('[data-action="add-links-inline"]')?.addEventListener("click",()=>{close();this.openLinkForm(id,{onDone:()=>this.openForm(id)});});
     this.content.querySelectorAll('[data-action="remove-link-inline"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!confirm("Encerrar este vínculo? O histórico será preservado."))return;
+      if(!(await this.confirmEndLink()))return;
       try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();close();showToast("Vínculo encerrado.","warning");this.openForm(id);}catch(error){showToast(error.message,"error");}
     }));
     const form=this.content.querySelector("#campaign-form");

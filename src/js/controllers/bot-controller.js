@@ -1,7 +1,8 @@
-import { renderBotCentral, renderBotEventDetail } from "../ui/bot-view.js";
+import { renderBotCentral, renderBotEventDetail, phoneLabel } from "../ui/bot-view.js";
 import { escapeHtml } from "../ui/number-presentation.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
+import { confirmDialog } from "../ui/confirm-dialog.js";
 
 export class BotController {
   constructor({ service, content }) { this.service = service; this.content = content; this.filters = {}; this.data = null; }
@@ -44,19 +45,42 @@ export class BotController {
   bindDetailActions(modal, event) {
     if (!modal) return;
 
-    modal.querySelector('[data-action="bot-mark-not-owned"]')?.addEventListener("click", async () => {
-      if (!window.confirm(`Marcar ${event.phoneNormalized || "este telefone"} como não pertencente à operação? O evento continuará no histórico, mas deixará de contar como pendente. Alertas futuros deste mesmo telefone serão ignorados automaticamente.`)) return;
+    const markNotOwnedTrigger = modal.querySelector('[data-action="bot-mark-not-owned"]');
+    markNotOwnedTrigger?.addEventListener("click", async () => {
+      if (markNotOwnedTrigger.disabled) return; // impede reabrir o diálogo enquanto a confirmação anterior ainda está em curso
+      const confirmed = await confirmDialog(this.content, {
+        icon: "!",
+        title: "Número fora da operação?",
+        bodyHtml: `<p>Você está prestes a marcar:</p><p class="confirm-dialog-phone">${phoneLabel(event.phoneNormalized)}</p><p>como um número que não pertence à operação.</p>`,
+        noteHtml: `<p>O evento continuará disponível no histórico, mas deixará de aparecer como pendente.</p><p>Novos alertas deste mesmo número serão ignorados automaticamente.</p>`,
+        confirmLabel: "Confirmar como externo",
+        tone: "danger",
+      });
+      if (!confirmed) return;
+      // Mesma lógica de sempre, só que agora acionada pelo modal customizado em vez do
+      // window.confirm() nativo — nada do que acontece depois da confirmação mudou.
+      markNotOwnedTrigger.disabled = true;
       try {
         await this.service.markNotOwned(event.id, event);
         showToast("Telefone classificado como não pertencente à operação.", "success");
         modal.remove();
         await this.render();
-      } catch (error) { showToast(error.message, "error"); }
+      } catch (error) {
+        showToast(error.message, "error");
+        markNotOwnedTrigger.disabled = false;
+      }
     });
 
     modal.querySelector('[data-action="bot-revert-not-owned"]')?.addEventListener("click", async (clickEvent) => {
       const externalId = clickEvent.currentTarget.dataset.externalId;
-      if (!window.confirm("Reverter a classificação de externo? Novos alertas deste telefone voltarão a ficar pendentes de associação.")) return;
+      const confirmed = await confirmDialog(this.content, {
+        icon: "!",
+        title: "Reverter a classificação de externo?",
+        bodyHtml: `<p>Novos alertas deste telefone voltarão a ficar pendentes de associação.</p>`,
+        confirmLabel: "Reverter classificação",
+        tone: "danger",
+      });
+      if (!confirmed) return;
       try {
         await this.service.revertNotOwned(externalId);
         showToast("Classificação de externo revertida.", "success");

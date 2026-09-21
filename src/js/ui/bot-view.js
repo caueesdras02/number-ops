@@ -3,7 +3,7 @@ import { PROCESSING_STATUS_LABELS, EVENT_TYPE_LABELS, CLASSIFICATION_LABELS } fr
 
 const BOT_ART = "./src/assets/number-ops-bot-logo.jpeg";
 const date = (value) => (value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
-const phoneLabel = (digits) => (digits && (digits.length === 12 || digits.length === 13) ? formatPhone(digits) : (digits ? escapeHtml(digits) : "—"));
+export const phoneLabel = (digits) => (digits && (digits.length === 12 || digits.length === 13) ? formatPhone(digits) : (digits ? escapeHtml(digits) : "—"));
 
 const statusClass = { RECEIVED: "is-pending", MATCHED: "is-ok", LINKED_TO_INCIDENT: "is-ok", PENDING_ASSOCIATION: "is-warning", IGNORED: "is-muted", IGNORED_NOT_OWNED: "is-muted", ERROR: "is-error" };
 const statusBadge = (processingStatus) => `<span class="bot-status-badge ${statusClass[processingStatus] ?? "is-muted"}">${escapeHtml(PROCESSING_STATUS_LABELS[processingStatus] ?? processingStatus)}</span>`;

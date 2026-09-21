@@ -78,12 +78,32 @@ function makeService(overrides = {}) {
   assert.equal(repository.rows[0].auth_key, "auth-key");
 }
 
-// 4) permissão negada -> erro amigável, nunca grava linha nem quebra o app
+// 4) permissão negada -> erro amigável e específico (bloqueado no navegador), nunca grava linha
 {
   const repository = makeRepo();
   const service = makeService({ repository, requestPermission: async () => "denied" });
-  await assert.rejects(() => service.subscribe(), /[Pp]ermiss/);
+  await assert.rejects(() => service.subscribe(), /bloqueadas/i);
   assert.equal(repository.rows.length, 0);
+}
+
+// 4b) outro valor não-granted (defensivo) -> mensagem genérica, distinta da de "denied"
+{
+  const repository = makeRepo();
+  const service = makeService({ repository, requestPermission: async () => "default" });
+  await assert.rejects(() => service.subscribe(), /[Pp]ermiss.*não concedida/);
+  assert.equal(repository.rows.length, 0);
+}
+
+// 4c) status() distingue "denied" (bloqueado) de "unsubscribed" (nunca perguntado/pode ativar)
+{
+  const deniedService = makeService({ getPermission: () => "denied" });
+  assert.equal(await deniedService.status(), "denied");
+  const defaultService = makeService({ getPermission: () => "default" });
+  assert.equal(await defaultService.status(), "unsubscribed");
+  const grantedService = makeService({ getPermission: () => "granted" });
+  assert.equal(await grantedService.status(), "unsubscribed", "granted sem inscrição ativa ainda é 'unsubscribed' — acionável, não precisa reabrir prompt");
+  const noPermissionReaderService = makeService();
+  assert.equal(await noPermissionReaderService.status(), "unsubscribed", "sem getPermission injetado, comportamento antigo é preservado");
 }
 
 // 5) assinar duas vezes no mesmo aparelho (mesmo endpoint) não duplica — idempotente

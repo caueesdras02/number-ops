@@ -1,5 +1,6 @@
 import { renderBackup } from "../ui/backup-view.js";
 import { showToast } from "../ui/toast.js";
+import { confirmDialog } from "../ui/confirm-dialog.js";
 
 export class BackupController {
   constructor({ service, content }) { this.service = service; this.content = content; this.preview = null; this.message = ""; }
@@ -22,7 +23,15 @@ export class BackupController {
     reader.readAsText(file);
   }
   async restore() {
-    if (!this.preview || !window.confirm("Restaurar este backup e substituir todos os dados atuais deste navegador?")) return;
+    if (!this.preview) return;
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: "Restaurar este backup?",
+      bodyHtml: `<p>Todos os dados atuais deste navegador serão substituídos.</p>`,
+      confirmLabel: "Restaurar backup",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try { await this.service.restore(this.preview); showToast("Backup restaurado. Recarregando a interface…", "success", 900); window.setTimeout(() => { window.location.hash = "#dashboard"; window.location.reload(); }, 300); } catch (error) { this.message = error.message; showToast(this.message, "error"); this.render(); }
   }
 }

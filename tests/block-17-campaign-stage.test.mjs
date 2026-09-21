@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { NumbersService } from "../src/js/services/numbers-service.js";
 import { CampaignsService, CAMPAIGN_STAGES, CAMPAIGN_STAGE_LABELS, effectiveCampaignStage } from "../src/js/services/campaigns-service.js";
-import { renderCampaigns, renderCampaignDetail, stageMenuItemsFor } from "../src/js/ui/campaigns-view.js";
+import { renderCampaigns, renderCampaignDetail, stageMenuItemsFor, situacaoFilterValue } from "../src/js/ui/campaigns-view.js";
 import { CampaignsController } from "../src/js/controllers/campaigns-controller.js";
 import { computeMenuPosition } from "../src/js/ui/stage-dropdown.js";
 
@@ -136,7 +136,8 @@ function makeServices() {
   assert.deepEqual(stageMenuItemsFor("CLOSED"), []);
 }
 
-// 11) renderCampaigns: badge interativo (botão) quando ACTIVE+canEdit; estático quando CLOSED ou !canEdit
+// 11) renderCampaigns: UM indicador só de situação (não mais Status + Etapa separados). Botão
+// interativo quando ACTIVE+canEdit; estático quando CLOSED ou !canEdit. Sem coluna Status.
 {
   const { campaigns } = makeServices();
   const active = campaigns.create({ name: "Ativa", clientId: "c1", squadId: "s1", responsibleId: "r1" });
@@ -145,21 +146,70 @@ function makeServices() {
 
   const htmlCanEdit = renderCampaigns({ campaigns: campaigns.list(), clients: [], squads: [], responsibles: [], filters: { query: "", status: "", stage: "" }, canEdit: true });
   assert.match(htmlCanEdit, /data-action="stage-open" data-id="[^"]*"/, "campanha ACTIVE com canEdit vira botão interativo");
-  assert.match(htmlCanEdit, /stage-static stage-encerrada/, "campanha CLOSED é sempre estática, mesmo com canEdit=true");
-  assert.doesNotMatch(htmlCanEdit, /data-action="change-stage"/i, "badge de etapa não é mais um <select> nativo (só os filtros de Status/Etapa continuam sendo <select>)");
+  assert.match(htmlCanEdit, /stage-encerrada/, "campanha CLOSED mostra Encerrada no ÚNICO indicador de situação");
+  assert.doesNotMatch(htmlCanEdit, /<th>Status<\/th>/, "não existe mais coluna Status separada");
+  assert.match(htmlCanEdit, /<th>Situação<\/th>/, "coluna única de Situação");
+  assert.doesNotMatch(htmlCanEdit, /status-badge/, "badge de status estrutural isolado não aparece mais na listagem");
+  // Confere que a linha da campanha fechada tem exatamente UM "Encerrada" no total.
+  const closedRowMatch = htmlCanEdit.match(/<tr>(?:(?!<\/tr>)[\s\S])*?Vai fechar(?:(?!<\/tr>)[\s\S])*?<\/tr>/);
+  assert.ok(closedRowMatch, "linha da campanha fechada encontrada");
+  const encerradaOccurrences = (closedRowMatch[0].match(/Encerrada/g) || []).length;
+  assert.equal(encerradaOccurrences, 1, "só uma ocorrência de 'Encerrada' por linha — um único indicador de situação");
 
   const htmlViewer = renderCampaigns({ campaigns: campaigns.list(), clients: [], squads: [], responsibles: [], filters: { query: "", status: "", stage: "" }, canEdit: false });
   assert.doesNotMatch(htmlViewer, /data-action="stage-open"/, "VIEWER nunca vê o botão interativo, só o badge estático");
   assert.match(htmlViewer, /stage-static stage-captacao/);
 }
 
-// 12) renderCampaignDetail: mesmo padrão visual, badges de status+etapa juntos
+// 11b) filtro único "Situação": uma só option list (Captação/Tá rolando·Pós live/Encerrada), sem filtro de Status separado
+{
+  const { campaigns } = makeServices();
+  const html = renderCampaigns({ campaigns: campaigns.list(), clients: [], squads: [], responsibles: [], filters: { query: "", status: "", stage: "" }, canEdit: true });
+  assert.match(html, /data-action="situacao-filter"/);
+  assert.doesNotMatch(html, /data-action="status"/, "filtro de Status separado foi removido");
+  assert.doesNotMatch(html, /data-action="stage-filter"/, "filtro de Etapa separado foi removido — agora é um só");
+  assert.match(html, /<option value="ENCERRADA"[^>]*>Encerrada<\/option>/);
+}
+
+// 11c) situacaoFilterValue: traduz os 2 filtros internos (status/stage) pro valor único da UI
+{
+  assert.equal(situacaoFilterValue({ status: "CLOSED", stage: "" }), "ENCERRADA");
+  assert.equal(situacaoFilterValue({ status: "ACTIVE", stage: "TA_ROLANDO_POS_LIVE" }), "TA_ROLANDO_POS_LIVE");
+  assert.equal(situacaoFilterValue({ status: "", stage: "" }), "");
+}
+
+// 12) renderCampaignDetail: um único indicador de situação no header (sem badge de status separado)
 {
   const { campaigns } = makeServices();
   const item = campaigns.create({ name: "Live do Lider", clientId: "c1", squadId: "s1", responsibleId: "r1" });
   const html = renderCampaignDetail({ item, clients: [], squads: [], responsibles: [], numbers: [], locations: [], links: [], canEdit: true });
   assert.match(html, /campaign-detail-badges/);
   assert.match(html, /data-action="stage-open" data-id="[^"]*"/);
+  assert.doesNotMatch(html, /status-badge/, "não existe mais badge de status separado no detalhe");
+}
+
+// 12b) renderCampaignDetail de uma campanha CLOSED: um único "Encerrada" no bloco de badges
+{
+  const { campaigns } = makeServices();
+  const item = campaigns.create({ name: "Live do Lider", clientId: "c1", squadId: "s1", responsibleId: "r1" });
+  campaigns.close(item.id);
+  const html = renderCampaignDetail({ item: campaigns.get(item.id), clients: [], squads: [], responsibles: [], numbers: [], locations: [], links: [], canEdit: true });
+  const badgesMatch = html.match(/<div class="campaign-detail-badges">[\s\S]*?<\/div>/);
+  assert.ok(badgesMatch, "bloco de badges encontrado");
+  const encerradaOccurrences = (badgesMatch[0].match(/Encerrada/g) || []).length;
+  assert.equal(encerradaOccurrences, 1, "detalhe da campanha fechada mostra Encerrada uma única vez");
+}
+
+// 12c) CampaignsController.applySituacaoFilter: traduz o valor único do <select> pros 2 filtros internos
+{
+  const content = { innerHTML: "", querySelector: () => null, querySelectorAll: () => [] };
+  const controller = new CampaignsController({ service: {}, content, currentProfile: null });
+  controller.applySituacaoFilter("ENCERRADA");
+  assert.deepEqual({ status: controller.filters.status, stage: controller.filters.stage }, { status: "CLOSED", stage: "" });
+  controller.applySituacaoFilter("CAPTACAO");
+  assert.deepEqual({ status: controller.filters.status, stage: controller.filters.stage }, { status: "ACTIVE", stage: "CAPTACAO" });
+  controller.applySituacaoFilter("");
+  assert.deepEqual({ status: controller.filters.status, stage: controller.filters.stage }, { status: "", stage: "" });
 }
 
 // 13) CampaignsController.canEdit: local/offline (sem profile) = acesso total; VIEWER = leitura; demais = total

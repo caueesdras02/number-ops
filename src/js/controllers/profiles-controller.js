@@ -1,6 +1,7 @@
 import { renderProfileForm, renderProfiles } from "../ui/profiles-view.js";
 import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../ui/number-presentation.js";
+import { confirmDialog } from "../ui/confirm-dialog.js";
 
 export class ProfilesController {
   constructor({ service, content, currentProfile }) { this.service = service; this.content = content; this.currentProfile = currentProfile; this.data = null; }
@@ -27,7 +28,15 @@ export class ProfilesController {
   async hardDelete(id) {
     const profile = this.data.profiles.find((item) => item.id === id);
     if (!profile) return;
-    if (!window.confirm(`Excluir definitivamente o usuário ${profile.name} (${profile.email})? O perfil será removido do sistema. A credencial de login deve ser removida no painel do Supabase Auth.`)) return;
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: "Excluir definitivamente este usuário?",
+      bodyHtml: `<p>O perfil será removido do sistema.</p><p class="confirm-dialog-phone">${escapeHtml(profile.name)} (${escapeHtml(profile.email)})</p>`,
+      noteHtml: `<p>A credencial de login deve ser removida no painel do Supabase Auth.</p>`,
+      confirmLabel: "Excluir usuário",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try {
       await this.service.hardDelete(id, this.currentProfile);
       showToast("Perfil removido. Remova a credencial no Supabase Auth para concluir.", "warning");

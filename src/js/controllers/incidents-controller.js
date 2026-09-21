@@ -1,6 +1,8 @@
-import { renderIncidents, renderIncidentForm, renderIncidentDetail } from "../ui/incidents-view.js";
+import { renderIncidents, renderIncidentForm, renderIncidentDetail, INCIDENT_TYPE_LABELS } from "../ui/incidents-view.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
+import { confirmDialog } from "../ui/confirm-dialog.js";
+import { escapeHtml } from "../ui/number-presentation.js";
 
 export class IncidentsController {
   constructor({ service, numbers, content }) { this.service = service; this.numbers = numbers; this.content = content; this.filters = {}; }
@@ -32,8 +34,15 @@ export class IncidentsController {
     const incident = this.service.get(id);
     if (!incident) return this.render();
     const next = incident.status === "OPEN" ? "RESOLVED" : "OPEN";
-    const action = next === "RESOLVED" ? "resolver" : "reabrir";
-    if (!window.confirm(`Deseja ${action} esta ocorrência?`)) return;
+    const action = next === "RESOLVED" ? "Resolver" : "Reabrir";
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: `${action} esta ocorrência?`,
+      bodyHtml: `<p class="confirm-dialog-phone">${escapeHtml(INCIDENT_TYPE_LABELS[incident.type] || incident.type)}${incident.description ? ` — ${escapeHtml(incident.description)}` : ""}</p>`,
+      confirmLabel: action,
+      tone: "primary",
+    });
+    if (!confirmed) return;
     this.service.setStatus(id, next);
     try { await this.numbers.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast(next === "RESOLVED" ? "Ocorrência resolvida." : "Ocorrência reaberta.", "success");

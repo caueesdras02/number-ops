@@ -4,6 +4,8 @@ import { renderChangeRoleForm } from "../ui/campaigns-view.js";
 import { showToast } from '../ui/toast.js';
 import { guardedSubmit } from '../ui/form-submit-guard.js';
 import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
+import { confirmDialog } from "../ui/confirm-dialog.js";
+import { formatPhone } from "../ui/number-presentation.js";
 import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
 
 export class NumbersController {
@@ -112,7 +114,15 @@ export class NumbersController {
 
   async archive(id) {
     const number = this.service.getNumber(id);
-    if (!number || !window.confirm(`Arquivar ${number.phone}? O número ficará inativo e indisponível.`)) return;
+    if (!number) return;
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: "Arquivar este número?",
+      bodyHtml: `<p>O número ficará inativo e indisponível.</p><p class="confirm-dialog-phone">${formatPhone(number.phone)}</p>`,
+      confirmLabel: "Arquivar número",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     this.service.archive(id);
     try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     this.render();
@@ -132,7 +142,15 @@ export class NumbersController {
   }
 
   async markUnderReview(id, returnToDetail = false) {
-    if (!window.confirm("Colocar este número em análise? O status será alterado, sem criar uma ocorrência automaticamente.")) return;
+    const number = this.service.getNumber(id);
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: "Colocar este número em análise?",
+      bodyHtml: `<p>O status será alterado, sem criar uma ocorrência automaticamente.</p>${number ? `<p class="confirm-dialog-phone">${formatPhone(number.phone)}</p>` : ""}`,
+      confirmLabel: "Colocar em análise",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     this.service.markUnderReview(id);
     try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast("Número colocado em análise.", "success");
@@ -154,7 +172,14 @@ export class NumbersController {
   }
 
   async endCampaignLink(id, campaignId) {
-    if(!window.confirm("Encerrar este vínculo de campanha? O histórico será preservado."))return;
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: "Encerrar este vínculo de campanha?",
+      bodyHtml: `<p>O histórico será preservado.</p>`,
+      confirmLabel: "Encerrar vínculo",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try { this.campaignsService.unassign(id,campaignId);await this.campaignsService.flush();showToast("Vínculo de campanha encerrado.","warning");this.showDetail(id); }
     catch(error){showToast(error.message,"error");}
   }
@@ -200,7 +225,14 @@ export class NumbersController {
   }
 
   async removeRestriction(id) {
-    if (!window.confirm("Remover a restrição ativa? O status principal não será alterado.")) return;
+    const confirmed = await confirmDialog(this.content, {
+      icon: "!",
+      title: "Remover a restrição ativa?",
+      bodyHtml: `<p>O status principal não será alterado.</p>`,
+      confirmLabel: "Remover restrição",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     this.service.removeRestriction(id);
     try { await this.service.flush(); } catch(error) { showToast(error.message,"error"); return; }
     showToast("Restrição operacional removida.", "success");
