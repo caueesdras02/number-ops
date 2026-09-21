@@ -52,13 +52,20 @@ for (const expected of expectedIcons) {
 
 const indexHtml = await readFile(path.join(root, "index.html"), "utf8");
 assert.match(indexHtml, /<link rel="apple-touch-icon" sizes="180x180" href="\.\/src\/assets\/icons\/apple-touch-icon-180\.png" \/>/, "apple-touch-icon precisa apontar pro ícone opaco de 180x180, não pra wordmark original");
-assert.match(indexHtml, /<link rel="icon" type="image\/svg\+xml" href="\.\/src\/assets\/favicon\.svg" \/>/);
-assert.match(indexHtml, /<link rel="icon" type="image\/png" href="\.\/src\/assets\/fivecon-no\.png" \/>/, "favicon PNG de fallback precisa continuar presente");
+assert.match(indexHtml, /<link rel="icon" type="image\/png" href="\.\/src\/assets\/fivecon-no\.png" \/>/, "favicon precisa continuar sendo exatamente o mesmo asset de antes do PWA (fivecon-no.png)");
+assert.doesNotMatch(indexHtml, /favicon\.svg/, "favicon.svg é um rascunho antigo (da identidade inicial, nunca atualizado) que nunca deveria ter sido usado como favicon — fivecon-no.png é o asset correto/atual");
 assert.match(indexHtml, /<link rel="manifest" href="\.\/manifest\.json" \/>/);
 
 const appleTouchBuffer = await readFile(path.join(root, "src/assets/icons/apple-touch-icon-180.png"));
 const appleTouchDims = pngDimensions(appleTouchBuffer);
 assert.equal(appleTouchDims.width, 180);
 assert.equal(appleTouchDims.height, 180);
+
+// Ícone/badge da notificação push: mesmo ícone opaco/quadrado do resto do PWA, nunca a wordmark
+// larga e transparente (número-ops.png) — regressão específica já corrigida uma vez.
+const serviceWorkerJs = await readFile(path.join(root, "service-worker.js"), "utf8");
+assert.match(serviceWorkerJs, /icon:\s*"\.\/src\/assets\/icons\/icon-192\.png"/);
+assert.match(serviceWorkerJs, /badge:\s*"\.\/src\/assets\/icons\/icon-192\.png"/);
+assert.doesNotMatch(serviceWorkerJs, /number-ops\.png/, "notificação push não deve usar a wordmark larga/transparente como ícone");
 
 console.log("Bloco 16 (ícones do PWA): todos os cenários passaram.");

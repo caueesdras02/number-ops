@@ -5,15 +5,45 @@ import { hasBlockingRestriction } from "../models/number.js";
 
 export const CAMPAIGN_STATUSES = Object.freeze({ ACTIVE: "ACTIVE", CLOSED: "CLOSED" });
 export const CAMPAIGN_ROLES = Object.freeze({ PRIMARY: "PRIMARY", BACKUP: "BACKUP", SUPPORT: "SUPPORT" });
+/**
+ * Etapa OPERACIONAL da campanha — só existe (é gravada) enquanto a campanha está ACTIVE.
+ * "Encerrada" NUNCA é um valor de `stage`: é só a leitura de status==='CLOSED', que já existe
+ * — evita duas fontes da mesma verdade. changeStage() nunca mexe em status/endedAt/número/
+ * cliente/responsável/vínculo; close()/reactivate() nunca mexem em stage (por isso reabrir
+ * preserva a última etapa automaticamente, sem precisar de nenhuma lógica extra).
+ */
+export const CAMPAIGN_STAGES = Object.freeze(["CAPTACAO", "TA_ROLANDO_POS_LIVE"]);
+export const CAMPAIGN_STAGE_LABELS = Object.freeze({ CAPTACAO: "Captação", TA_ROLANDO_POS_LIVE: "Tá rolando / Pós live", ENCERRADA: "Encerrada" });
+/** Etapa "efetiva" para exibição: quando a campanha está CLOSED, mostra sempre "Encerrada"
+ * (derivado do status estrutural) — nunca lê `stage` nesse caso, mesmo que o valor gravado
+ * continue lá (preservado pra quando a campanha for reaberta). */
+export function effectiveCampaignStage(campaign) {
+  return campaign.status === CAMPAIGN_STATUSES.CLOSED ? "ENCERRADA" : campaign.stage;
+}
 
 export class CampaignsService {
   constructor(numbersService) { this.numbers = numbersService; this.state = numbersService.state; this.state.campaigns ??= []; this.state.numberCampaignLinks ??= []; }
-  list(filters = {}) { return this.state.campaigns.filter((item) => (!filters.query || item.name.toLocaleLowerCase("pt-BR").includes(filters.query.toLocaleLowerCase("pt-BR"))) && (!filters.status || item.status === filters.status) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
+  list(filters = {}) { return this.state.campaigns.filter((item) => (!filters.query || item.name.toLocaleLowerCase("pt-BR").includes(filters.query.toLocaleLowerCase("pt-BR"))) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
   get(id) { return this.state.campaigns.find((item) => item.id === id) ?? null; }
   create(input) { this.validate(input); const item = createCampaign({ ...input, status: CAMPAIGN_STATUSES.ACTIVE }); this.state.campaigns.push(item); this.persist(); return item; }
   update(id, input) { const existing = this.get(id); if (!existing) throw new Error("Campanha não encontrada."); this.validate(input); const item = { ...existing, name: String(input.name).trim(), clientId: input.clientId || null, squadId: input.squadId || null, responsibleId: input.responsibleId || null, notes: String(input.notes ?? "").trim(), updatedAt: now() }; Object.assign(existing, item); this.persist(); return existing; }
   close(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); if(item.status===CAMPAIGN_STATUSES.CLOSED)return item;item.status = CAMPAIGN_STATUSES.CLOSED; item.endedAt = now(); item.updatedAt = now(); this.state.numberCampaignLinks.filter((link) => link.campaignId === id && !link.endedAt).forEach((link) => { link.endedAt = item.endedAt; link.updatedAt = item.endedAt; this.numbers.record(link.numberId, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: id, newValue: null }); }); this.persist(); return item; }
   reactivate(id) { const item = this.get(id); if (!item) throw new Error("Campanha não encontrada."); if (item.status === CAMPAIGN_STATUSES.ACTIVE) return item; item.status = CAMPAIGN_STATUSES.ACTIVE; item.endedAt = null; item.updatedAt = now(); this.persist(); return item; }
+  /** Etapa operacional (Captação / Tá rolando · Pós live) — só se aplica a campanha ACTIVE;
+   * nunca mexe em status estrutural, endedAt, número, cliente, responsável ou vínculo.
+   * Idempotente. Para "Encerrada", use close() diretamente (é o fluxo oficial, não duplicado
+   * aqui — ver CampaignsController). */
+  changeStage(id, stage) {
+    const item = this.get(id);
+    if (!item) throw new Error("Campanha não encontrada.");
+    if (item.status !== CAMPAIGN_STATUSES.ACTIVE) throw new Error("Só é possível alterar a etapa de uma campanha ativa.");
+    if (!CAMPAIGN_STAGES.includes(stage)) throw new Error("Selecione uma etapa válida.");
+    if (item.stage === stage) return item;
+    item.stage = stage;
+    item.updatedAt = now();
+    this.persist();
+    return item;
+  }
   /** Candidatos a novo vínculo: nem arquivados, nem com restrição operacional bloqueante (ex.: Sem área). */
   availableNumbers() { return this.numbers.state.numbers.filter((number) => !number.archivedAt && !hasBlockingRestriction(number)); }
   /** Números disponíveis para vincular a uma campanha específica (exclui os já vinculados ativamente a ELA; um número pode estar em outras campanhas). */

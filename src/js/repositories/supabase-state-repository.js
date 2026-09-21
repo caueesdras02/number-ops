@@ -26,7 +26,7 @@ export class SupabaseStateRepository {
       responsibles:rows.responsibles.map((row)=>({...named(row),team:row.team,squadId:row.squad_id})),
       locations:rows.locations.map((row)=>({...named(row),responsibleId:row.responsible_id})),
       numbers:rows.numbers.map((row)=>camelNumber(row,(clientsByNumber[row.id]??[]).map((item)=>item.client_id),(squadsByNumber[row.id]??[]).map((item)=>item.squad_id),restrictionsByNumber[row.id]?.[0]?{kind:restrictionsByNumber[row.id][0].kind,description:restrictionsByNumber[row.id][0].description,recordedAt:restrictionsByNumber[row.id][0].recorded_at}:null)),
-      campaigns:rows.campaigns.map((row)=>({id:row.id,name:row.name,clientId:row.client_id,squadId:row.squad_id,responsibleId:row.responsible_id,notes:row.notes,status:row.status,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
+      campaigns:rows.campaigns.map((row)=>({id:row.id,name:row.name,clientId:row.client_id,squadId:row.squad_id,responsibleId:row.responsible_id,notes:row.notes,status:row.status,stage:row.stage??"CAPTACAO",startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
       numberCampaignLinks:rows.number_campaign_links.map((row)=>({id:row.id,numberId:row.number_id,campaignId:row.campaign_id,role:row.role,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
       // origin/classification/campaignId/integrationEventId são só LEITURA aqui (exibição) —
       // nunca entram no mapeamento de escrita (sync/incidentRow), então um upsert feito pelo
@@ -62,7 +62,7 @@ export class SupabaseStateRepository {
     const responsibleRow=(x)=>({id:x.id,name:x.name,team:x.team||"",squad_id:x.squadId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
     const locationRow=(x)=>({id:x.id,name:x.name,responsible_id:x.responsibleId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
     const numberRow=(x)=>({id:x.id,phone:x.phone,identification:x.identification,status:x.status,location_id:x.locationId||null,responsible_id:x.responsibleId||null,group_count:x.groupCount??0,notes:x.notes||"",archived_at:x.archivedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
-    const campaignRow=(x)=>({id:x.id,name:x.name,client_id:x.clientId,squad_id:x.squadId,responsible_id:x.responsibleId||null,notes:x.notes||"",status:x.status,started_at:x.startedAt,ended_at:x.endedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
+    const campaignRow=(x)=>({id:x.id,name:x.name,client_id:x.clientId,squad_id:x.squadId,responsible_id:x.responsibleId||null,notes:x.notes||"",status:x.status,stage:x.stage||"CAPTACAO",started_at:x.startedAt,ended_at:x.endedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
     const linkRow=(x)=>({id:x.id,number_id:x.numberId,campaign_id:x.campaignId,role:x.role,started_at:x.startedAt,ended_at:x.endedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
     const incidentRow=(x)=>({id:x.id,number_id:x.numberId,type:x.type,title:x.title,description:x.description||"",status:x.status,responsible_id:x.responsibleId||null,resolution_notes:x.resolutionNotes||"",resolved_by_id:x.resolvedById||null,resolved_at:x.resolvedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
     const historyRow=(x)=>({id:x.id,number_id:x.numberId,type:x.type,description:x.description,previous_value:x.previousValue??null,new_value:x.newValue??null,metadata:x.metadata??null,occurred_at:x.occurredAt});

@@ -170,7 +170,7 @@ assert.match(detailHtml, /Pedro Melo/);
 assert.match(detailHtml, /Encerrar campanha/);
 assert.match(detailHtml, /Vincular números/);
 assert.match(detailHtml, /Números atuais/);
-assert.match(detailHtml, /Histórico de números/);
+assert.match(detailHtml, /Contas registradas no SendFlow \(Histórico\)/);
 
 // 19) encerrar campanha encerra vínculos ativos e preserva histórico
 campaigns.assign("n1", campaignA.id, "PRIMARY");

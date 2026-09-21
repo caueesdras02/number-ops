@@ -1,15 +1,23 @@
-import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns, renderChangeRoleForm } from "../ui/campaigns-view.js";
+import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns, renderChangeRoleForm, stageMenuItemsFor } from "../ui/campaigns-view.js";
+import { openStageMenu, closeActiveStageMenu, isStageMenuOpenFor } from "../ui/stage-dropdown.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
+import { canOperate } from "../models/access.js";
 export class CampaignsController {
-  constructor({ service, content }) { this.service=service; this.content=content; this.filters={query:"",status:""}; }
+  constructor({ service, content, currentProfile = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; }
+  // Sem profile (modo local/offline, sem Supabase) = acesso total, igual ao resto do app nesse
+  // modo (não passa por RLS nem pelo `data-access-level` do app-shell). Só restringe quando existe
+  // um profile autenticado E ele é VIEWER.
+  get canEdit() { return !this.currentProfile || canOperate(this.currentProfile); }
   render() {
     const state=this.service.state;
-    this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,responsibles:state.responsibles,filters:this.filters,gaps:this.service.findClientCampaignGaps()});
+    this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,responsibles:state.responsibles,filters:this.filters,gaps:this.service.findClientCampaignGaps(),canEdit:this.canEdit});
     this.content.querySelector('[data-action="add"]')?.addEventListener("click",()=>this.openForm());
     this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.render();});
     this.content.querySelector('[data-action="status"]')?.addEventListener("change",(event)=>{this.filters.status=event.target.value;this.render();});
+    this.content.querySelector('[data-action="stage-filter"]')?.addEventListener("change",(event)=>{this.filters.stage=event.target.value;this.render();});
+    this.bindStageTriggers();
     this.content.querySelectorAll('[data-action="view"]').forEach((button)=>button.addEventListener("click",()=>this.detail(button.dataset.id)));
     this.content.querySelectorAll('[data-action="edit"]').forEach((button)=>button.addEventListener("click",()=>this.openForm(button.dataset.id)));
     this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button)=>button.addEventListener("click",()=>this.hardDelete(button.dataset.id)));
@@ -23,9 +31,47 @@ export class CampaignsController {
       try{this.service.reactivate(button.dataset.id);await this.service.flush();showToast("Campanha reativada.","success");this.render();}catch(error){showToast(error.message,"error");}
     }));
   }
+  /** Etapa operacional: abre o popover customizado (ui/stage-dropdown.js) com as opções da
+   * campanha ACTIVE (Captação / Tá rolando·Pós live / Encerrada). Mesmo widget na listagem e no
+   * detalhe; só existe como botão quando ACTIVE e canEdit — campanha CLOSED ou VIEWER só vê o
+   * badge estático (view), então este código nunca roda nesses casos — dupla proteção, sem
+   * duplicar lógica de RBAC. */
+  bindStageTriggers() {
+    const onDetail=Boolean(this.content.querySelector('[data-action="back"]'));
+    this.content.querySelectorAll('[data-action="stage-open"]').forEach((trigger)=>trigger.addEventListener("click",()=>{
+      if(isStageMenuOpenFor(trigger)){closeActiveStageMenu();return;}
+      const id=trigger.dataset.id;
+      const item=this.service.get(id);
+      if(!item)return;
+      openStageMenu(trigger,{
+        items:stageMenuItemsFor(item.status),
+        current:item.stage,
+        onSelect:(value)=>this.handleStageSelect(id,value,onDetail),
+      });
+    }));
+  }
+  /** "Encerrada" reaproveita close() com segurança — mesmo fluxo oficial (confirmação,
+   * encerra vínculos, preserva histórico) usado pelo botão "Encerrar campanha"; nunca duplicado
+   * aqui. Qualquer outra opção só troca a etapa operacional (changeStage), sem tocar status. */
+  async handleStageSelect(id,value,onDetail) {
+    try{
+      if(value==="ENCERRADA"){
+        if(!confirm("Encerrar esta campanha?"))return;
+        this.service.close(id);
+        await this.service.flush();
+        showToast("Campanha encerrada.","warning");
+      }else{
+        this.service.changeStage(id,value);
+        await this.service.flush();
+        showToast("Etapa atualizada.","success");
+      }
+    }catch(error){showToast(error.message,"error");return;}
+    onDetail?this.detail(id):this.render();
+  }
   detail(id) {
     const item=this.service.get(id);if(!item)return this.render();const state=this.service.state;
-    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||""))});
+    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||"")),canEdit:this.canEdit});
+    this.bindStageTriggers();
     this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{if(window.location.hash!=="#campaigns")window.location.hash="#campaigns";else this.render();});
     this.content.querySelector('[data-action="add-links"]')?.addEventListener("click",()=>this.openLinkForm(id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener("click",()=>this.hardDelete(id,true));

@@ -181,7 +181,7 @@ assert.match(listHtml, /data-master-only/);
 
 const campDetail = renderCampaignDetail({ item: { id: "camp1", name: "C", clientId: "c1", squadId: "s1", status: "ACTIVE", startedAt: "2026-01-01" }, clients: [], squads: [], responsibles: [], numbers: [{ id: "n1", phone: "5511999999991", status: "ACTIVE", locationId: null }], locations: [], links: [{ id: "lk1", numberId: "n1", role: "PRIMARY", startedAt: "2026-01-01", endedAt: null }, { id: "lk2", numberId: "n1", role: "BACKUP", startedAt: "2025-12-01", endedAt: "2025-12-31" }], allLinks: [{ numberId: "n1", endedAt: null }] });
 assert.match(campDetail, /Números atuais/);
-assert.match(campDetail, /Histórico de números/);
+assert.match(campDetail, /Contas registradas no SendFlow \(Histórico\)/);
 
 const incForm = renderIncidentForm(null, [{ id: "n1", phone: "5511999999991" }], []);
 assert.match(incForm, /name="type"/);

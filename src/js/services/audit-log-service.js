@@ -21,6 +21,7 @@ const ACTION_LABELS = Object.freeze({
   CAMPAIGN_CLOSED: "Campanha encerrada",
   CAMPAIGN_REACTIVATED: "Campanha reativada",
   CAMPAIGN_RESPONSIBLE_CHANGED: "Responsável da campanha alterado",
+  CAMPAIGN_STAGE_CHANGED: "Etapa da campanha alterada",
   NUMBER_CAMPAIGN_LINKED: "Número vinculado à campanha",
   NUMBER_CAMPAIGN_CHANGED: "Campanha do número alterada",
   NUMBER_CAMPAIGN_ROLE_CHANGED: "Papel do número alterado",

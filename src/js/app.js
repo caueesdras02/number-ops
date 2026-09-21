@@ -67,7 +67,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
   return {
     numbersService,
     numbers:new NumbersController({service:numbersService,campaignsService,content}),
-    campaigns:new CampaignsController({service:campaignsService,content}),
+    campaigns:new CampaignsController({service:campaignsService,content,currentProfile}),
     directories:Object.fromEntries(["clients","groups","responsibles","locations"].map((type)=>[type,new DirectoryController({service:directoryService,campaignsService,content,type})])),
     incidents:new IncidentsController({service:new IncidentsService(numbersService,new HistoryService(numbersService)),numbers:numbersService,content}),
     history:new HistoryController({service:new HistoryService(numbersService),numbers:numbersService,content}),
