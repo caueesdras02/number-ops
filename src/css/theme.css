@@ -200,3 +200,6 @@
 :root[data-theme="dark"] .bot-pending-more { color: #d8b98a; }
 :root[data-theme="dark"] .bot-pending-list li { border-top-color: rgb(240 217 160 / .16); }
 :root[data-theme="dark"] tr.is-pending-row { background: rgb(240 217 160 / .07); }
+
+:root[data-theme="dark"] .table-scroll-fade-start { background: linear-gradient(to right, rgb(0 0 0 / .35), transparent); }
+:root[data-theme="dark"] .table-scroll-fade-end { background: linear-gradient(to left, rgb(0 0 0 / .35), transparent); }

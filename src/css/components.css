@@ -30,6 +30,27 @@ h1 { margin-top: 4px; font-size: clamp(1.75rem, 3vw, 2.25rem); letter-spacing: -
 .input:focus { border-color: var(--color-primary); outline: 0; box-shadow: 0 0 0 3px var(--color-focus-ring); }
 .table-card { overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .table-scroll { overflow-x: auto; }
+
+/* Dica de scroll horizontal + fade nas bordas — só mobile, injetado por table-scroll-hint.js.
+   Nunca altera .table-scroll/table em si nem aparece em desktop (ver breakpoint abaixo). */
+.table-scroll-wrap { position: relative; }
+.table-scroll-hint, .table-scroll-fade { display: none; }
+@media (max-width: 860px) {
+  .table-scroll-hint {
+    display: flex; align-items: center; width: max-content; margin: 0 0 8px; padding: 4px 10px;
+    border-radius: 999px; color: var(--color-muted); background: var(--color-surface-muted);
+    font-size: .72rem; font-weight: 700; white-space: nowrap; pointer-events: none;
+    transition: opacity var(--duration-base) var(--ease-out);
+  }
+  .table-scroll-hint.is-dismissed { opacity: 0; }
+  .table-scroll-fade {
+    display: block; position: absolute; top: 0; bottom: 0; width: 28px;
+    opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-out);
+  }
+  .table-scroll-fade.is-visible { opacity: 1; }
+  .table-scroll-fade-start { left: 0; background: linear-gradient(to right, rgb(11 51 38 / .14), transparent); }
+  .table-scroll-fade-end { right: 0; background: linear-gradient(to left, rgb(11 51 38 / .14), transparent); }
+}
 table { width: 100%; min-width: 790px; border-collapse: collapse; text-align: left; }
 th, td { padding: 15px 16px; border-bottom: 1px solid var(--color-border); vertical-align: middle; font-size: .9rem; }
 th { color: var(--color-muted); background: var(--color-surface-muted); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; }
