@@ -1,6 +1,6 @@
 import { ACCESS_LEVELS, isAdminOrAbove, isMaster, assertLastMasterSafe } from "../models/access.js";
 
-const JOB_TITLES = new Set(["ANALYST", "ACCOUNT_MANAGER"]);
+const JOB_TITLES = new Set(["ANALYST", "ACCOUNT_MANAGER", "OTHER"]);
 const STATUSES = new Set(["ACTIVE", "INACTIVE"]);
 const LEVELS = new Set(ACCESS_LEVELS);
 
