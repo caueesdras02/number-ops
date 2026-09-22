@@ -37,12 +37,14 @@ import { PushService } from "./services/push-service.js";
 import { bindPushToggle } from "./ui/push-toggle.js";
 import { VAPID_PUBLIC_KEY } from "./config/supabase-runtime.js";
 import { observeTableScrollHints } from "./ui/table-scroll-hint.js";
+import { observeSearchableSelects } from "./ui/searchable-select.js";
 
 initTheme();
 bindThemeToggles();
 
 const content=document.querySelector("#page-content");
 observeTableScrollHints(content);
+observeSearchableSelects(content);
 const title=document.querySelector("#page-title");
 const navigationLinks=document.querySelectorAll("[data-view]");
 const appShell=document.querySelector(".app-shell");

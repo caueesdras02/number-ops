@@ -249,6 +249,23 @@ button.stage-trigger:focus-visible{outline:2px solid var(--color-focus-ring);out
 .stage-menu-option-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stage-check{color:var(--color-primary-deep);font-weight:900}
 .stage-menu-option.stage-encerrada{margin-top:4px;padding-top:11px;border-top:1px solid var(--color-border)}
+
+/* Select pesquisável (searchable-select.js) — acrescenta busca por texto em <select> com muitas
+   opções (Cliente, Colaborador, Localização, Campanha, Número, Usuário...) sem trocar o <select>
+   original: ele continua no DOM (name/required/value intactos), só fica visualmente por baixo do
+   campo de texto, então FormData(form) nunca muda. Painel portado pro <body>, mesmo motivo do
+   .stage-menu acima: nunca cortado pelo overflow de um modal. */
+.searchable-select { position: relative; }
+.searchable-select-input { padding-right: 28px; }
+.searchable-select-native { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+.searchable-select-clear { position: absolute; top: 50%; right: 5px; display: grid; width: 22px; height: 22px; place-items: center; transform: translateY(-50%); border: 0; border-radius: 6px; color: var(--color-muted); background: transparent; cursor: pointer; font-size: 1rem; line-height: 1; }
+.searchable-select-clear:hover { color: var(--color-primary-deep); background: var(--color-surface-muted); }
+.searchable-select-listbox { position: fixed; z-index: var(--layer-popover); max-height: 280px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-md); }
+.searchable-select-listbox li[role="option"] { padding: 9px 10px; border-radius: 8px; color: var(--color-text); font-size: .86rem; cursor: pointer; }
+.searchable-select-listbox li[role="option"].is-active,
+.searchable-select-listbox li[role="option"]:hover { background: var(--color-surface-muted); }
+.searchable-select-listbox li[role="option"][aria-selected="true"] { font-weight: 800; background: var(--color-primary-soft); }
+.searchable-select-empty { padding: 10px; color: var(--color-muted); font-size: .82rem; text-align: center; }
 .app-shell[data-access-level="VIEWER"] [data-action="add"],.app-shell[data-access-level="VIEWER"] [data-action="edit"],.app-shell[data-access-level="VIEWER"] [data-action="archive"],.app-shell[data-access-level="VIEWER"] [data-action="restore"],.app-shell[data-access-level="VIEWER"] [data-action="review"],.app-shell[data-access-level="VIEWER"] [data-action="register-restriction"],.app-shell[data-access-level="VIEWER"] [data-action="remove-restriction"],.app-shell[data-access-level="VIEWER"] [data-action="manage-campaign"],.app-shell[data-access-level="VIEWER"] [data-action="end-campaign-link"],.app-shell[data-access-level="VIEWER"] [data-action="close"],.app-shell[data-access-level="VIEWER"] [data-action="close-campaign"],.app-shell[data-access-level="VIEWER"] [data-action="toggle"],.app-shell[data-access-level="VIEWER"] [data-action="reactivate"],.app-shell[data-access-level="VIEWER"] [data-action="add-links"],.app-shell[data-access-level="VIEWER"] [data-action="end-link"],.app-shell[data-access-level="VIEWER"] [data-action="add-links-inline"],.app-shell[data-access-level="VIEWER"] [data-action="remove-link-inline"],.app-shell[data-access-level="VIEWER"] [data-action="change-role"],.app-shell[data-access-level="VIEWER"] [data-action="bot-mark-not-owned"],.app-shell[data-access-level="VIEWER"] [data-action="bot-revert-not-owned"],.app-shell[data-access-level="VIEWER"] .bot-associate-details{display:none!important}
 @media(min-width:701px) and (max-width:1200px){.number-record{grid-template-columns:minmax(190px,.9fr) minmax(0,1.6fr)}.number-record>.record-actions{grid-column:1/-1;justify-content:start}}
 @media(max-width:520px){.directory-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.directory-actions .button{width:100%;min-width:0;padding-inline:7px}}

@@ -1,4 +1,5 @@
 import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
+import { matchesSearch } from "../models/search-match.js";
 
 const labels = { clients: "Clientes", groups: "Squads", responsibles: "Colaboradores", locations: "Localizações" };
 const singular = { clients: "Cliente", groups: "Squad", responsibles: "Colaborador", locations: "Localização" };
@@ -19,17 +20,36 @@ const campaignCards = (campaigns, groups, links, active) => {
   }).join("") || `<div class="directory-empty compact"><span aria-hidden="true">◇</span><div><h3>Nenhuma campanha ${active ? "atual" : "anterior"}</h3><p>${active ? "Campanhas ativas deste cliente aparecerão aqui." : "Campanhas encerradas permanecerão disponíveis aqui."}</p></div></div>`;
 };
 
+// Gate de escrita reaproveitado tanto no HTML completo quanto no re-render parcial da lista.
+const writeGate = "data-admin-only";
+
+function filterDirectoryItems(items, query) {
+  return items.filter((item) => matchesSearch(item.name, query));
+}
+
+function directoryListHtml(type, visible, query, groups, responsibles) {
+  return visible.map((item) => `<article class="directory-record ${item.isActive ? "" : "is-archived"}"><span class="directory-icon" aria-hidden="true">${icon[type]}</span><div class="directory-record-main"><strong>${escapeHtml(item.name)}</strong><small>${directorySubtitle(type,item,groups,responsibles)}</small></div><span class="directory-state ${item.isActive ? "is-active" : "is-archived"}">${item.isActive ? "Ativo" : "Arquivado"}</span><div class="directory-actions">${type === "clients" || type === "groups" || type === "locations" || type === "responsibles" ? `<button class="button button-quiet" data-action="view" data-id="${item.id}">${viewActionLabel[type]}</button>` : ""}<button class="button button-quiet" data-action="edit" data-id="${item.id}" ${writeGate}>Editar</button>${item.isActive ? `<button class="button button-danger" data-action="archive" data-id="${item.id}" ${writeGate}>Arquivar</button>` : `<button class="button button-primary" data-action="restore" data-id="${item.id}" ${writeGate}>Restaurar</button>`}<button class="button button-danger" data-action="hard-delete" data-id="${item.id}" data-master-only>Excluir definitivamente</button></div></article>`).join("") || `<div class="directory-empty"><span aria-hidden="true">${icon[type]}</span><div><h3>Nenhum ${singular[type].toLocaleLowerCase("pt-BR")} encontrado</h3><p>${query ? "Tente ajustar a busca." : "Adicione o primeiro registro para começar."}</p></div>${query ? `<button class="button button-quiet" data-action="clear-search">Limpar busca</button>` : `<button class="button button-primary" data-action="add" ${writeGate}>Adicionar</button>`}</div>`;
+}
+
+/** Só a lista (resultado da busca) + a contagem — usado pelo controller pra atualizar a tela SEM
+ * substituir o <input> de busca (o que derrubaria o foco a cada letra digitada). O HTML completo
+ * (renderDirectory, abaixo) usa exatamente esta mesma função por baixo — uma única fonte de verdade
+ * pro filtro e pra marcação de cada registro. */
+export function renderDirectoryResults(type, items, query, groups = [], responsibles = []) {
+  const visible = filterDirectoryItems(items, query);
+  return { count: visible.length, listHtml: directoryListHtml(type, visible, query, groups, responsibles) };
+}
+
 export function renderDirectory(type, items, query = "", groups = [], responsibles = []) {
   const label = labels[type];
   const queryValue = escapeHtml(query);
-  const visible = items.filter((item) => item.name.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")));
+  const { count, listHtml } = renderDirectoryResults(type, items, query, groups, responsibles);
   const squadlessClients = type === "clients" ? items.filter((item) => item.isActive && !item.squadId).length : 0;
   // Clientes, Squads, Colaboradores e Localizações: só ADMIN/MASTER criam, editam ou arquivam.
-  const writeGate = "data-admin-only";
   return `<section class="directory-polished">
     <header class="directory-heading"><div><p class="eyebrow">Cadastros operacionais</p><h2>${label}</h2><p>${type === "responsibles" ? "Cada colaborador pertence a um Squad; os clientes do Squad ficam sob sua responsabilidade." : `Organize os ${label.toLocaleLowerCase("pt-BR")} ligados aos números.`}</p></div><div class="directory-heading-actions">${type === "clients" && squadlessClients ? `<button class="button button-quiet" data-action="bulk-squad" data-admin-only>Definir Squad em massa (${squadlessClients})</button>` : ""}<button class="button button-primary" data-action="add" ${writeGate}>+ Adicionar ${singular[type].toLocaleLowerCase("pt-BR")}</button></div></header>
-    <div class="directory-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><span class="sr-only">Buscar ${label.toLocaleLowerCase("pt-BR")}</span><input class="input" type="search" data-action="search" value="${queryValue}" placeholder="Buscar ${label.toLocaleLowerCase("pt-BR")}"></label><span class="directory-count">${visible.length} ${visible.length === 1 ? "registro" : "registros"}</span></div>
-    <div class="directory-list">${visible.map((item) => `<article class="directory-record ${item.isActive ? "" : "is-archived"}"><span class="directory-icon" aria-hidden="true">${icon[type]}</span><div class="directory-record-main"><strong>${escapeHtml(item.name)}</strong><small>${directorySubtitle(type,item,groups,responsibles)}</small></div><span class="directory-state ${item.isActive ? "is-active" : "is-archived"}">${item.isActive ? "Ativo" : "Arquivado"}</span><div class="directory-actions">${type === "clients" || type === "groups" || type === "locations" || type === "responsibles" ? `<button class="button button-quiet" data-action="view" data-id="${item.id}">${viewActionLabel[type]}</button>` : ""}<button class="button button-quiet" data-action="edit" data-id="${item.id}" ${writeGate}>Editar</button>${item.isActive ? `<button class="button button-danger" data-action="archive" data-id="${item.id}" ${writeGate}>Arquivar</button>` : `<button class="button button-primary" data-action="restore" data-id="${item.id}" ${writeGate}>Restaurar</button>`}<button class="button button-danger" data-action="hard-delete" data-id="${item.id}" data-master-only>Excluir definitivamente</button></div></article>`).join("") || `<div class="directory-empty"><span aria-hidden="true">${icon[type]}</span><div><h3>Nenhum ${singular[type].toLocaleLowerCase("pt-BR")} encontrado</h3><p>${query ? "Tente ajustar a busca." : "Adicione o primeiro registro para começar."}</p></div>${query ? `<button class="button button-quiet" data-action="clear-search">Limpar busca</button>` : `<button class="button button-primary" data-action="add" ${writeGate}>Adicionar</button>`}</div>`}</div>
+    <div class="directory-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><span class="sr-only">Buscar ${label.toLocaleLowerCase("pt-BR")}</span><input class="input" type="search" data-action="search" value="${queryValue}" placeholder="Buscar ${label.toLocaleLowerCase("pt-BR")}" autocomplete="off"></label><span class="directory-count">${count} ${count === 1 ? "registro" : "registros"}</span></div>
+    <div class="directory-list">${listHtml}</div>
   </section>`;
 }
 
@@ -84,7 +104,7 @@ export function renderDirectoryDetail(type, item, numbers, locations, responsibl
 export function renderDirectoryForm(type, item = {}, groups = [], responsibles = []) {
   const label = singular[type];
   const squadSelect = (name) => `<select class="input" name="${name}"><option value="">Sem Squad</option>${groups.map((group) => `<option value="${group.id}" ${group.id === item.squadId ? "selected" : ""}>${escapeHtml(group.name)}</option>`).join("")}</select>`;
-  const responsibleSelect = (name) => `<select class="input" name="${name}"><option value="">Sem colaborador</option>${responsibles.map((responsible) => `<option value="${responsible.id}" ${responsible.id === item.responsibleId ? "selected" : ""}>${escapeHtml(responsible.name)}</option>`).join("")}</select>`;
+  const responsibleSelect = (name) => `<select class="input" name="${name}" data-searchable-select data-search-placeholder="Buscar colaborador"><option value="">Sem colaborador</option>${responsibles.map((responsible) => `<option value="${responsible.id}" ${responsible.id === item.responsibleId ? "selected" : ""}>${escapeHtml(responsible.name)}</option>`).join("")}</select>`;
   const extra = type === "responsibles"
     ? `<label>Squad<small class="form-hint">Define os clientes sob responsabilidade deste colaborador.</small>${squadSelect("squadId")}</label>`
     : type === "clients"

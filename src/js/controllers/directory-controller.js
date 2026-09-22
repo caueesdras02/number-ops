@@ -1,4 +1,4 @@
-import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDirectoryForm, renderGroupDetail, renderResponsibleDetail } from "../ui/directory-view.js";
+import { renderBulkSquadForm, renderDirectory, renderDirectoryDetail, renderDirectoryForm, renderDirectoryResults, renderGroupDetail, renderResponsibleDetail } from "../ui/directory-view.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
@@ -20,13 +20,54 @@ export class DirectoryController {
     if (this.type === "locations") bindPageTabs(this.content, NUMBERS_SECTION_TABS);
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
     this.content.querySelector('[data-action="bulk-squad"]')?.addEventListener("click", () => this.openBulkSquad());
-    this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.render(); });
-    this.content.querySelector('[data-action="clear-search"]')?.addEventListener("click", () => { this.query = ""; this.render(); });
-    this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.detail(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", async () => { try { this.service.restore(this.type, button.dataset.id); await this.service.flush(); showToast(`${labels[this.type]} restaurado.`, "success"); this.render(); } catch(error) { showToast(error.message,"error"); } }));
+    // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
+    // o foco a cada letra) — só a lista é atualizada, ver renderResults().
+    this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.renderResults(); });
+    this.bindListActions();
+  }
+
+  /** Delegado no container da lista (um listener só, não um por botão): continua funcionando
+   * depois que renderResults() troca o innerHTML da lista a cada busca, sem precisar religar nada. */
+  bindListActions() {
+    const list = this.content.querySelector(".directory-list");
+    if (!list || list.dataset.actionsBound === "true") return;
+    list.dataset.actionsBound = "true";
+    list.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const { id, action } = button.dataset;
+      if (action === "view") this.detail(id);
+      else if (action === "edit") this.openForm(id);
+      else if (action === "archive") this.archive(id);
+      else if (action === "hard-delete") this.hardDelete(id);
+      else if (action === "restore") this.restore(id);
+      else if (action === "clear-search") {
+        this.query = "";
+        const input = this.content.querySelector('[data-action="search"]');
+        if (input) input.value = "";
+        this.renderResults();
+      }
+    });
+  }
+
+  /** Só re-renderiza a lista + a contagem (mesma função de filtro/marcação do HTML completo, ver
+   * renderDirectoryResults) — o restante da página (busca, filtros, botões de topo) não muda. */
+  renderResults() {
+    const list = this.content.querySelector(".directory-list");
+    const countEl = this.content.querySelector(".directory-count");
+    if (!list) return this.render();
+    const result = renderDirectoryResults(this.type, this.service.list(this.type, true), this.query, this.state.groups, this.state.responsibles);
+    list.innerHTML = result.listHtml;
+    if (countEl) countEl.textContent = `${result.count} ${result.count === 1 ? "registro" : "registros"}`;
+  }
+
+  async restore(id) {
+    try {
+      this.service.restore(this.type, id);
+      await this.service.flush();
+      showToast(`${labels[this.type]} restaurado.`, "success");
+      this.render();
+    } catch (error) { showToast(error.message, "error"); }
   }
 
   detail(id) {

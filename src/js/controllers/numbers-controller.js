@@ -1,4 +1,4 @@
-import { renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
+import { renderNumberForm, renderNumberRows, renderNumbersView } from "../ui/numbers-view.js";
 import { renderCampaignAddForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
 import { renderChangeRoleForm } from "../ui/campaigns-view.js";
 import { showToast } from '../ui/toast.js';
@@ -6,6 +6,7 @@ import { guardedSubmit } from '../ui/form-submit-guard.js';
 import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { formatPhone } from "../ui/number-presentation.js";
+import { matchesSearch } from "../models/search-match.js";
 import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
 
 export class NumbersController {
@@ -26,25 +27,56 @@ export class NumbersController {
   }
 
   bindPageEvents() {
+    // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
+    // o foco a cada letra) — só os cartões da lista são atualizados, ver renderResults(). Não
+    // precisa mais de hack de focus()/setSelectionRange depois do render.
     this.content.querySelector("#number-search")?.addEventListener("input", (event) => {
       this.query = event.target.value;
-      const cursorPosition = event.target.selectionStart;
-      this.render();
-      const searchInput = this.content.querySelector("#number-search");
-      searchInput?.focus();
-      searchInput?.setSelectionRange(cursorPosition, cursorPosition);
+      this.renderResults();
     });
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
-    this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.showDetail(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="review"]').forEach((button) => button.addEventListener("click", () => this.markUnderReview(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="restore"]').forEach((button) => button.addEventListener("click", async () => { try { this.service.restore(button.dataset.id); await this.service.flush(); this.render(); showToast('Número restaurado para operação.', 'success'); } catch(error) { showToast(error.message,"error"); } }));
+    this.bindListActions();
     this.content.querySelector("#archive-filter")?.addEventListener("change", (event) => { this.archiveFilter = event.target.value; this.render(); });
     this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
     this.content.querySelectorAll('[data-action="toggle-filters"]').forEach((button) => button.addEventListener('click', () => { this.filtersOpen = !this.filtersOpen; this.render(); }));
     this.content.querySelectorAll('[data-action="clear-filters"]').forEach((button) => button.addEventListener('click', () => { this.query = ''; this.archiveFilter = 'ALL'; this.filters = {}; this.render(); }));
+  }
+
+  /** Delegado no container da lista (um listener só, não um por cartão): continua funcionando
+   * depois que renderResults() troca o innerHTML da lista a cada letra digitada. */
+  bindListActions() {
+    const list = this.content.querySelector(".numbers-list");
+    if (!list || list.dataset.actionsBound === "true") return;
+    list.dataset.actionsBound = "true";
+    list.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const { id, action } = button.dataset;
+      if (action === "view") this.showDetail(id);
+      else if (action === "edit") this.openForm(id);
+      else if (action === "review") this.markUnderReview(id);
+      else if (action === "archive") this.archive(id);
+      else if (action === "hard-delete") this.hardDelete(id);
+      else if (action === "restore") {
+        try { this.service.restore(id); await this.service.flush(); this.render(); showToast('Número restaurado para operação.', 'success'); } catch (error) { showToast(error.message, "error"); }
+      } else if (action === "add" || action === "clear-filters") {
+        // botões do estado vazio ("Adicionar número" / "Limpar filtros") reaproveitam a mesma ação do topo
+        if (action === "add") this.openForm(); else { this.query = ''; this.archiveFilter = 'ALL'; this.filters = {}; this.render(); }
+      }
+    });
+  }
+
+  /** Só re-renderiza os cartões da lista + a contagem (mesma função usada no HTML completo, ver
+   * renderNumberRows) — busca, filtros e o resto da página não mudam. */
+  renderResults() {
+    const list = this.content.querySelector(".numbers-list");
+    const countEl = this.content.querySelector(".numbers-result-bar strong");
+    if (!list) return this.render();
+    const filters = { ...this.filters, archiveFilter: this.archiveFilter };
+    const numbers = this.service.getNumbers(this.query, filters);
+    const activeCount = Object.values(this.filters).filter(Boolean).length + (this.archiveFilter !== "ALL" ? 1 : 0);
+    list.innerHTML = renderNumberRows(numbers, this.service.getLocations(), this.service.getResponsibles(), this.service.getClients(), this.service.getGroups(), this.service.state.campaigns, this.service.state.numberCampaignLinks, this.query, activeCount);
+    if (countEl) countEl.textContent = `${numbers.length} ${numbers.length === 1 ? "número encontrado" : "números encontrados"}`;
   }
 
   showDetail(id) {
@@ -84,11 +116,10 @@ export class NumbersController {
     const group = input.dataset.relationSearch;
     const optionsContainer = form.querySelector(`[data-relation-options="${group}"]`);
     if (!optionsContainer) return;
-    const query = input.value.trim().toLocaleLowerCase("pt-BR");
     const options = [...optionsContainer.querySelectorAll(".check-option")];
     let visibleCount = 0;
     options.forEach((option) => {
-      const matches = !query || option.textContent.toLocaleLowerCase("pt-BR").includes(query);
+      const matches = matchesSearch(option.textContent, input.value);
       option.hidden = !matches;
       if (matches) visibleCount++;
     });

@@ -2,6 +2,7 @@ import { createCampaign, createNumberCampaignLink } from "../models/entities.js"
 import { now } from "../models/helpers.js";
 import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete.js";
 import { hasBlockingRestriction } from "../models/number.js";
+import { matchesSearch } from "../models/search-match.js";
 
 export const CAMPAIGN_STATUSES = Object.freeze({ ACTIVE: "ACTIVE", CLOSED: "CLOSED" });
 export const CAMPAIGN_ROLES = Object.freeze({ PRIMARY: "PRIMARY", BACKUP: "BACKUP", SUPPORT: "SUPPORT" });
@@ -23,7 +24,7 @@ export function effectiveCampaignStage(campaign) {
 
 export class CampaignsService {
   constructor(numbersService) { this.numbers = numbersService; this.state = numbersService.state; this.state.campaigns ??= []; this.state.numberCampaignLinks ??= []; }
-  list(filters = {}) { return this.state.campaigns.filter((item) => (!filters.query || item.name.toLocaleLowerCase("pt-BR").includes(filters.query.toLocaleLowerCase("pt-BR"))) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
+  list(filters = {}) { return this.state.campaigns.filter((item) => matchesSearch(item.name, filters.query) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
   get(id) { return this.state.campaigns.find((item) => item.id === id) ?? null; }
   create(input) { this.validate(input); const item = createCampaign({ ...input, status: CAMPAIGN_STATUSES.ACTIVE }); this.state.campaigns.push(item); this.persist(); return item; }
   update(id, input) { const existing = this.get(id); if (!existing) throw new Error("Campanha não encontrada."); this.validate(input); const item = { ...existing, name: String(input.name).trim(), clientId: input.clientId || null, squadId: input.squadId || null, responsibleId: input.responsibleId || null, notes: String(input.notes ?? "").trim(), updatedAt: now() }; Object.assign(existing, item); this.persist(); return existing; }

@@ -1,5 +1,6 @@
 import { escapeHtml, nameFor } from "./number-presentation.js";
 import { ACCESS_LEVEL_LABELS, isMaster } from "../models/access.js";
+import { matchesSearch } from "../models/search-match.js";
 
 const labels = {
   ANALYST: "Analista", ACCOUNT_MANAGER: "Gerente de Contas", OTHER: "Outro",
@@ -7,7 +8,14 @@ const labels = {
   ...ACCESS_LEVEL_LABELS,
 };
 
-export function renderProfiles({ profiles, squads, currentProfile }) {
+export function filterProfiles(profiles, query) {
+  return profiles.filter((profile) => matchesSearch(profile.name, query) || matchesSearch(profile.email, query));
+}
+
+/** Só as linhas da tabela (ou o estado vazio) — usado pelo controller pra atualizar a busca SEM
+ * substituir o <input> (que fica fora do table-scroll), preservando o foco a cada letra digitada.
+ * O HTML completo (renderProfiles, abaixo) usa exatamente esta mesma função. */
+export function renderProfileRows(profiles, squads, currentProfile) {
   const master = isMaster(currentProfile);
   const admin = master || currentProfile.access_level === "ADMIN";
   const rows = profiles.map((profile) => {
@@ -15,7 +23,12 @@ export function renderProfiles({ profiles, squads, currentProfile }) {
     const canDelete = master && profile.id !== currentProfile.id;
     return `<tr><td><strong>${escapeHtml(profile.name)}</strong><span class="table-secondary">${escapeHtml(profile.email)}</span></td><td>${labels[profile.job_title] ?? escapeHtml(profile.job_title || "—")}</td><td>${escapeHtml(nameFor(squads, profile.squad_id, "Sem Squad"))}</td><td><span class="status-badge ${profile.status === "ACTIVE" ? "status-active" : "status-inactive"}">${labels[profile.status] ?? escapeHtml(profile.status)}</span></td><td><strong class="access-level access-${(profile.access_level || "").toLowerCase()}">${labels[profile.access_level] ?? escapeHtml(profile.access_level || "—")}</strong></td><td class="table-actions">${canEdit ? `<button class="button button-quiet" data-action="edit-profile" data-id="${profile.id}">Editar</button>` : '<span class="table-secondary">Somente leitura</span>'}${canDelete ? `<button class="button button-danger" data-action="hard-delete-profile" data-id="${profile.id}" data-master-only>Excluir definitivamente</button>` : ""}</td></tr>`;
   }).join("");
-  return `<section class="numbers-page"><div class="page-heading"><div><p class="eyebrow">Acesso</p><h2>Usuários</h2><p>Hierarquia: <strong>Master</strong> &gt; Admin &gt; User &gt; Viewer. Somente MASTER altera nível de acesso ou exclui definitivamente. Senhas permanecem no Supabase Auth.</p></div></div><div class="table-card"><div class="table-scroll"><table><thead><tr><th>Usuário</th><th>Cargo</th><th>Squad</th><th>Status</th><th>Acesso</th><th>Ações</th></tr></thead><tbody>${rows || '<tr><td class="empty-cell" colspan="6">Nenhum usuário encontrado.</td></tr>'}</tbody></table></div></div></section>`;
+  return rows || '<tr><td class="empty-cell" colspan="6">Nenhum usuário encontrado.</td></tr>';
+}
+
+export function renderProfiles({ profiles, squads, currentProfile, query = "" }) {
+  const visible = filterProfiles(profiles, query);
+  return `<section class="numbers-page"><div class="page-heading"><div><p class="eyebrow">Acesso</p><h2>Usuários</h2><p>Hierarquia: <strong>Master</strong> &gt; Admin &gt; User &gt; Viewer. Somente MASTER altera nível de acesso ou exclui definitivamente. Senhas permanecem no Supabase Auth.</p></div></div><div class="list-controls"><label class="search-panel">Buscar<input class="input" data-action="search" type="search" value="${escapeHtml(query)}" placeholder="Nome ou e-mail" autocomplete="off"></label></div><div class="table-card"><div class="table-scroll"><table><thead><tr><th>Usuário</th><th>Cargo</th><th>Squad</th><th>Status</th><th>Acesso</th><th>Ações</th></tr></thead><tbody>${renderProfileRows(visible, squads, currentProfile)}</tbody></table></div></div></section>`;
 }
 
 export function renderProfileForm(profile, squads, currentProfile) {

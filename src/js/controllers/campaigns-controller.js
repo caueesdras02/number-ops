@@ -1,10 +1,11 @@
-import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns, renderChangeRoleForm, stageMenuItemsFor } from "../ui/campaigns-view.js";
+import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaignRows, renderCampaigns, renderChangeRoleForm, stageMenuItemsFor } from "../ui/campaigns-view.js";
 import { openStageMenu, closeActiveStageMenu, isStageMenuOpenFor } from "../ui/stage-dropdown.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { canOperate } from "../models/access.js";
+import { matchesSearch } from "../models/search-match.js";
 export class CampaignsController {
   constructor({ service, content, currentProfile = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; }
   // Diálogos reaproveitados nos 2-3 pontos que disparam a mesma ação (lista, detalhe, seletor de
@@ -52,21 +53,56 @@ export class CampaignsController {
     const state=this.service.state;
     this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,responsibles:state.responsibles,filters:this.filters,gaps:this.service.findClientCampaignGaps(),canEdit:this.canEdit});
     this.content.querySelector('[data-action="add"]')?.addEventListener("click",()=>this.openForm());
-    this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.render();});
+    // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
+    // o foco a cada letra) — só as linhas da tabela são atualizadas, ver renderResults().
+    this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.renderResults();});
     this.content.querySelector('[data-action="situacao-filter"]')?.addEventListener("change",(event)=>{this.applySituacaoFilter(event.target.value);this.render();});
-    this.bindStageTriggers();
-    this.content.querySelectorAll('[data-action="view"]').forEach((button)=>button.addEventListener("click",()=>this.detail(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="edit"]').forEach((button)=>button.addEventListener("click",()=>this.openForm(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button)=>button.addEventListener("click",()=>this.hardDelete(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;}));
-    this.content.querySelectorAll('[data-action="close"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!(await this.confirmCloseCampaign()))return;
-      try{this.service.close(button.dataset.id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
-    }));
-    this.content.querySelectorAll('[data-action="reactivate"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!(await this.confirmReactivateCampaign()))return;
-      try{this.service.reactivate(button.dataset.id);await this.service.flush();showToast("Campanha reativada.","success");this.render();}catch(error){showToast(error.message,"error");}
-    }));
+    this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;})); // linhas do relatório de vínculos faltando (gap-report), não muda com a busca
+    this.bindListActions();
+  }
+  /** Delegado no <tbody> (um listener só, não um por botão/linha): continua funcionando depois
+   * que renderResults() troca o innerHTML das linhas a cada busca, sem precisar religar nada.
+   * Cobre também o gatilho de Etapa (stage-open), que também vive dentro de cada linha. */
+  bindListActions() {
+    const tbody=this.content.querySelector(".table-card tbody");
+    if(!tbody||tbody.dataset.actionsBound==="true")return;
+    tbody.dataset.actionsBound="true";
+    tbody.addEventListener("click",async(event)=>{
+      const stageTrigger=event.target.closest('[data-action="stage-open"]');
+      if(stageTrigger){
+        if(isStageMenuOpenFor(stageTrigger)){closeActiveStageMenu();return;}
+        const id=stageTrigger.dataset.id;
+        const item=this.service.get(id);
+        if(!item)return;
+        openStageMenu(stageTrigger,{items:stageMenuItemsFor(item.status),current:item.stage,onSelect:(value)=>this.handleStageSelect(id,value,false)});
+        return;
+      }
+      const button=event.target.closest("[data-action]");
+      if(!button)return;
+      const id=button.dataset.id;
+      const action=button.dataset.action;
+      if(action==="view")this.detail(id);
+      else if(action==="edit")this.openForm(id);
+      else if(action==="hard-delete")this.hardDelete(id);
+      else if(action==="close"){
+        if(!(await this.confirmCloseCampaign()))return;
+        try{this.service.close(id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
+      }else if(action==="reactivate"){
+        if(!(await this.confirmReactivateCampaign()))return;
+        try{this.service.reactivate(id);await this.service.flush();showToast("Campanha reativada.","success");this.render();}catch(error){showToast(error.message,"error");}
+      }
+    });
+  }
+  /** Só re-renderiza as linhas da tabela (mesma função usada no HTML completo, ver
+   * renderCampaignRows) — busca, filtro de Situação e o resto da página não mudam. */
+  renderResults() {
+    const tbody=this.content.querySelector(".table-card tbody");
+    if(!tbody)return this.render();
+    const state=this.service.state;
+    tbody.innerHTML=renderCampaignRows(this.service.list(this.filters),state.clients,state.groups,state.responsibles,this.canEdit);
+    // Recalcula o fade de scroll horizontal da tabela (table-scroll-hint.js já escuta 'scroll' no
+    // .table-scroll) — sem isso, o fade ficaria desatualizado depois que a busca muda a largura útil.
+    this.content.querySelector(".table-scroll")?.dispatchEvent(new Event("scroll"));
   }
   /** Etapa operacional: abre o popover customizado (ui/stage-dropdown.js) com as opções da
    * campanha ACTIVE (Captação / Tá rolando·Pós live / Encerrada). Mesmo widget na listagem e no
@@ -194,10 +230,9 @@ export class CampaignsController {
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     const form=this.content.querySelector("#campaign-add-links-form");
     form?.querySelector("[data-link-search]")?.addEventListener("input",(event)=>{
-      const query=event.target.value.trim().toLocaleLowerCase("pt-BR");
       const rows=[...form.querySelectorAll("[data-relation-option]")];
       let visible=0;
-      rows.forEach((row)=>{const matches=!query||row.textContent.toLocaleLowerCase("pt-BR").includes(query);row.hidden=!matches;if(matches)visible++;});
+      rows.forEach((row)=>{const matches=matchesSearch(row.textContent,event.target.value);row.hidden=!matches;if(matches)visible++;});
       const empty=form.querySelector("[data-link-empty]");
       if(empty)empty.hidden=visible!==0||rows.length===0;
     });

@@ -3,6 +3,7 @@ import { escapeHtml } from "../ui/number-presentation.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
+import { matchesSearch } from "../models/search-match.js";
 
 export class BotController {
   constructor({ service, content }) { this.service = service; this.content = content; this.filters = {}; this.data = null; }
@@ -91,10 +92,9 @@ export class BotController {
 
     const form = modal.querySelector("[data-bot-associate-form]");
     form?.querySelector("[data-link-search]")?.addEventListener("input", (inputEvent) => {
-      const query = inputEvent.target.value.trim().toLocaleLowerCase("pt-BR");
       const rows = [...form.querySelectorAll("[data-relation-option]")];
       let visible = 0;
-      rows.forEach((row) => { const matches = !query || row.textContent.toLocaleLowerCase("pt-BR").includes(query); row.hidden = !matches; if (matches) visible++; });
+      rows.forEach((row) => { const matches = matchesSearch(row.textContent, inputEvent.target.value); row.hidden = !matches; if (matches) visible++; });
       const empty = form.querySelector("[data-link-empty]");
       if (empty) empty.hidden = visible !== 0 || rows.length === 0;
     });
