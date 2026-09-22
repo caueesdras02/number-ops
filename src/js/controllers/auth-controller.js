@@ -2,14 +2,15 @@ import { renderEmailConfirmError, renderEmailConfirmed, renderForgotPassword, re
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { bindThemeToggles } from "../ui/theme-toggle.js";
 
+const NOT_AUTHORIZED_MESSAGE = "E-mail não autorizado\n\nEste e-mail não está registrado como colaborador do Number Ops. Solicite acesso ao administrador responsável.";
+
 export class AuthController {
   constructor({ service, root }) { this.service = service; this.root = root; this.mode = "login"; this.message = ""; this.forgotSent = false; }
 
   async render() {
     this.root.classList.add("is-auth-screen");
-    const squads = this.mode === "register" ? await this.service.listActiveSquads() : [];
     this.root.innerHTML =
-      this.mode === "register" ? renderRegistration(squads, this.message) :
+      this.mode === "register" ? renderRegistration(this.message) :
       this.mode === "forgot" ? renderForgotPassword(this.message, this.forgotSent) :
       this.mode === "reset" ? renderResetPassword(this.message) :
       this.mode === "confirmed" ? renderEmailConfirmed(this.message) :
@@ -21,7 +22,30 @@ export class AuthController {
     this.root.querySelector('[data-auth-form="forgot"]')?.addEventListener("submit", (event) => this.forgotPassword(event));
     this.root.querySelector('[data-auth-form="reset"]')?.addEventListener("submit", (event) => this.updatePassword(event));
     this.bindPasswordToggles();
+    if (this.mode === "register") this.bindEmailAuthorizationCheck();
     bindThemeToggles(this.root);
+  }
+
+  /**
+   * Checagem antecipada de UX (feedback assim que a pessoa sai do campo de
+   * e-mail): não é a proteção real — só evita preencher o resto do
+   * formulário para descobrir depois que o e-mail não foi autorizado. Quem
+   * bloqueia de verdade é o handle_new_user() no banco (019), inclusive
+   * contra chamadas diretas ao Supabase que pulem esta tela inteira.
+   */
+  bindEmailAuthorizationCheck() {
+    const form = this.root.querySelector('[data-auth-form="register"]');
+    const emailInput = form?.elements.email;
+    const hint = form?.querySelector("[data-email-auth-hint]");
+    if (!emailInput || !hint) return;
+    emailInput.addEventListener("blur", async () => {
+      const email = emailInput.value.trim();
+      if (!email || !email.includes("@")) { hint.hidden = true; return; }
+      let authorized = true;
+      try { authorized = await this.service.isEmailAuthorized(email); } catch { return; }
+      hint.hidden = authorized;
+      hint.textContent = authorized ? "" : "Este e-mail ainda não foi autorizado. Solicite acesso ao administrador responsável.";
+    });
   }
 
   bindPasswordToggles() {
@@ -49,12 +73,20 @@ export class AuthController {
   async register(event) {
     const form = event.currentTarget;
     guardedSubmit(form, event, async () => {
+      const values = Object.fromEntries(new FormData(form));
       try {
-        await this.service.register(Object.fromEntries(new FormData(form)));
+        if ((await this.service.isEmailAuthorized(values.email)) === false) {
+          this.message = NOT_AUTHORIZED_MESSAGE;
+          await this.render();
+          return;
+        }
+      } catch { /* RPC indisponível: não bloqueia no cliente — o backend (handle_new_user) decide */ }
+      try {
+        await this.service.register(values);
         this.mode = "login";
         this.message = "Cadastro realizado. Confirme o e-mail, se solicitado, e faça login.";
         await this.render();
-      } catch (error) { this.message = error.message || "Não foi possível criar a conta."; await this.render(); }
+      } catch (error) { this.message = /não autorizado/i.test(error.message || "") ? NOT_AUTHORIZED_MESSAGE : (error.message || "Não foi possível criar a conta."); await this.render(); }
     });
   }
 

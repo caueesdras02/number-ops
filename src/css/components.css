@@ -34,22 +34,56 @@ h1 { margin-top: 4px; font-size: clamp(1.75rem, 3vw, 2.25rem); letter-spacing: -
 /* Dica de scroll horizontal + fade nas bordas — só mobile, injetado por table-scroll-hint.js.
    Nunca altera .table-scroll/table em si nem aparece em desktop (ver breakpoint abaixo). */
 .table-scroll-wrap { position: relative; }
-.table-scroll-hint, .table-scroll-fade { display: none; }
+.table-scroll-hint, .table-scroll-fade, .table-scroll-nav { display: none; }
 @media (max-width: 860px) {
+  /* Indicador de continuidade: pill com o mesmo texto/seta pedidos, em cor de marca (não cinza
+     neutro) pra realmente chamar atenção — fica visível desde o carregamento e só some quando o
+     usuário chega ao fim de verdade do scroll (ver table-scroll-hint.js), nunca "no primeiro
+     toque". Isso é o que resolve a percepção de "a tabela termina aqui": antes ela sumia cedo
+     demais e não voltava. */
   .table-scroll-hint {
-    display: flex; align-items: center; width: max-content; margin: 0 0 8px; padding: 4px 10px;
-    border-radius: 999px; color: var(--color-muted); background: var(--color-surface-muted);
-    font-size: .72rem; font-weight: 700; white-space: nowrap; pointer-events: none;
+    display: flex; align-items: center; width: max-content; margin: 0 0 10px; padding: 6px 12px;
+    border-radius: 999px; color: var(--color-primary-deep); background: var(--color-primary-soft);
+    font-size: .74rem; font-weight: 800; white-space: nowrap; pointer-events: none;
     transition: opacity var(--duration-base) var(--ease-out);
   }
   .table-scroll-hint.is-dismissed { opacity: 0; }
+
+  /* Fade mais largo e mais forte que antes (era quase imperceptível) — puramente visual, nunca
+     recebe clique (isso é papel do botão .table-scroll-nav, por cima dele). */
   .table-scroll-fade {
-    display: block; position: absolute; top: 0; bottom: 0; width: 28px;
+    display: block; position: absolute; top: 0; bottom: 0; width: 40px; z-index: 1;
     opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-out);
   }
   .table-scroll-fade.is-visible { opacity: 1; }
-  .table-scroll-fade-start { left: 0; background: linear-gradient(to right, rgb(11 51 38 / .14), transparent); }
-  .table-scroll-fade-end { right: 0; background: linear-gradient(to left, rgb(11 51 38 / .14), transparent); }
+  .table-scroll-fade-start { left: 0; background: linear-gradient(to right, rgb(11 51 38 / .22), transparent); }
+  .table-scroll-fade-end { right: 0; background: linear-gradient(to left, rgb(11 51 38 / .22), transparent); }
+
+  /* Botão de navegação: era só um selo decorativo ("›"), agora clicável — avança/volta a tabela
+     com scroll suave (ver table-scroll-hint.js). Continua com a mesma cara (selo verde circular)
+     e a mesma posição (borda da tabela, centralizado na vertical), só que responde a clique/tecla.
+     z-index acima do fade (1); some via [hidden] em vez de opacity — nunca fica focável por
+     teclado enquanto não faz sentido usá-lo (início/fim do scroll). */
+  .table-scroll-nav {
+    position: absolute; top: 50%; z-index: 2; display: grid; place-items: center;
+    width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
+    color: var(--color-white); background: var(--color-primary);
+    font-size: 1.05rem; font-weight: 900; line-height: 1; cursor: pointer;
+    transform: translateY(-50%); box-shadow: var(--shadow-sm);
+    transition: background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+  }
+  .table-scroll-nav[hidden] { display: none; }
+  .table-scroll-nav:hover { background: var(--color-primary-bright); }
+  .table-scroll-nav:active { transform: translateY(-50%) scale(.92); }
+  .table-scroll-nav:focus-visible { outline: 2px solid var(--color-primary-deep); outline-offset: 2px; }
+  .table-scroll-nav-prev { left: 6px; }
+  .table-scroll-nav-next { right: 6px; }
+
+  /* Linhas mais compactas no mobile (o padding de 15px do desktop deixava cada linha alta demais
+     quando já se está apertado na horizontal) — mantém padding lateral e leitura confortável, só
+     reduz o respiro vertical. */
+  .table-scroll th, .table-scroll td { padding-block: 10px; }
+  .table-scroll .table-secondary { margin-top: 2px; }
 }
 table { width: 100%; min-width: 790px; border-collapse: collapse; text-align: left; }
 th, td { padding: 15px 16px; border-bottom: 1px solid var(--color-border); vertical-align: middle; font-size: .9rem; }
@@ -177,7 +211,7 @@ tr.is-pending-row{background:rgb(227 164 39/.06)}
 @media(max-width:700px){.detail-restriction{align-items:stretch;flex-direction:column;padding:14px}.detail-restriction .button{width:100%;justify-content:center}.record-actions .restriction-badge{display:none}}
 
 .group-count-value{color:var(--color-primary-deep)!important;font-size:.95rem!important}.operation-summary .group-count-highlight{border:1px solid var(--color-primary);background:var(--color-primary-soft)}.operation-summary .group-count-highlight strong{font-size:1.05rem}.client-campaign-list{display:grid;gap:9px}.client-campaign-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-muted)}.client-campaign-card h4{margin:7px 0 3px;font-size:.94rem}.client-campaign-card p,.client-campaign-card small{color:var(--color-muted);font-size:.76rem}.client-campaign-actions{display:flex;flex-wrap:wrap;justify-content:end;gap:7px}.client-campaign-actions .button{min-height:35px;padding:7px 9px;font-size:.74rem}@media(max-width:700px){.client-campaign-card{align-items:stretch;flex-direction:column}.client-campaign-actions{justify-content:stretch}.client-campaign-actions .button{flex:1}}
-.topbar-actions{display:flex;align-items:center;gap:10px}.auth-page{display:grid;min-height:100dvh;place-items:center;padding:24px;background:linear-gradient(135deg,var(--color-primary-deep),#163d34)}.auth-card{display:grid;width:min(100%,430px);gap:14px;padding:30px;border:1px solid rgb(255 255 255/.3);border-radius:var(--radius-lg);background:var(--color-surface);box-shadow:var(--shadow-md)}.auth-card>img{width:170px;max-height:58px;object-fit:contain;object-position:left}.auth-card h1{font-size:1.65rem}.auth-card>p:not(.eyebrow){color:var(--color-muted)}.auth-card form{display:grid;gap:12px}.auth-card label{display:grid;gap:6px;color:var(--color-text);font-size:.82rem;font-weight:750}.auth-message{padding:10px 12px;border-radius:9px;color:#842222;background:#ffebeb;font-size:.82rem}.password-field{position:relative;display:flex}.password-field .input{flex:1;padding-right:42px}.password-toggle{position:absolute;top:50%;right:5px;display:grid;width:32px;height:32px;place-items:center;transform:translateY(-50%);border:0;border-radius:8px;color:var(--color-muted);background:transparent;cursor:pointer}.password-toggle:hover{color:var(--color-primary-deep);background:var(--color-primary-soft)}.password-toggle.is-visible{color:var(--color-primary-deep)}.password-toggle.is-visible .password-toggle-slash{display:none}.auth-forgot-link{justify-self:end;margin:-6px 0 0;padding:0;border:0;color:var(--color-primary-deep);background:transparent;cursor:pointer;font:inherit;font-size:.78rem;font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.topbar-actions{display:flex;align-items:center;gap:10px}.auth-page{display:grid;min-height:100dvh;place-items:center;padding:24px;background:linear-gradient(135deg,var(--color-primary-deep),#163d34)}.auth-card{display:grid;width:min(100%,430px);gap:14px;padding:30px;border:1px solid rgb(255 255 255/.3);border-radius:var(--radius-lg);background:var(--color-surface);box-shadow:var(--shadow-md)}.auth-card>img{width:170px;max-height:58px;object-fit:contain;object-position:left}.auth-card h1{font-size:1.65rem}.auth-card>p:not(.eyebrow){color:var(--color-muted)}.auth-card form{display:grid;gap:12px}.auth-card label{display:grid;gap:6px;color:var(--color-text);font-size:.82rem;font-weight:750}.auth-message{padding:10px 12px;border-radius:9px;color:#842222;background:#ffebeb;font-size:.82rem;white-space:pre-line}.password-field{position:relative;display:flex}.password-field .input{flex:1;padding-right:42px}.password-toggle{position:absolute;top:50%;right:5px;display:grid;width:32px;height:32px;place-items:center;transform:translateY(-50%);border:0;border-radius:8px;color:var(--color-muted);background:transparent;cursor:pointer}.password-toggle:hover{color:var(--color-primary-deep);background:var(--color-primary-soft)}.password-toggle.is-visible{color:var(--color-primary-deep)}.password-toggle.is-visible .password-toggle-slash{display:none}.auth-forgot-link{justify-self:end;margin:-6px 0 0;padding:0;border:0;color:var(--color-primary-deep);background:transparent;cursor:pointer;font:inherit;font-size:.78rem;font-weight:700;text-decoration:underline;text-underline-offset:2px}
 .auth-page{padding:clamp(16px,4vw,48px);background:radial-gradient(circle at 15% 15%,#286b59 0,transparent 32%),linear-gradient(145deg,#0b2e26,#143f35)}.auth-layout{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(390px,1.1fr);width:min(100%,980px);min-height:610px;overflow:hidden;border:1px solid rgb(255 255 255/.16);border-radius:24px;background:var(--color-surface);box-shadow:0 28px 80px rgb(0 0 0/.28)}.auth-brand-panel{display:flex;flex-direction:column;justify-content:space-between;gap:32px;padding:44px;color:#eafff4;background:linear-gradient(160deg,#123c32,#0b2b24)}.auth-brand-panel>img{width:190px;filter:drop-shadow(0 8px 18px rgb(0 0 0/.35))}.auth-brand-panel h2{margin:9px 0 15px;color:#fff;font-size:clamp(2rem,4vw,3rem);line-height:1.04;letter-spacing:-.055em}.auth-brand-panel p:not(.eyebrow){max-width:390px;color:#b9d8cc;line-height:1.6}.auth-brand-panel ul{display:grid;gap:13px;margin:0;padding:0;list-style:none;color:#d8eee5;font-size:.88rem;font-weight:700}.auth-brand-panel li{display:flex;align-items:center;gap:9px}.auth-brand-panel li span{display:grid;width:24px;height:24px;place-items:center;border-radius:8px;color:#0b4233;background:#78e4ac;font-size:.72rem}.auth-brand-panel small{color:#88b3a3}.auth-card{align-content:center;width:auto;padding:clamp(30px,6vw,66px);border:0;border-radius:0;box-shadow:none}.auth-card h1{margin-top:2px;font-size:clamp(1.8rem,3vw,2.35rem);letter-spacing:-.045em}.auth-intro{margin-bottom:10px;color:var(--color-muted);line-height:1.55}.auth-card form{gap:14px}.auth-card .input{min-height:48px}.auth-submit{justify-content:space-between;width:100%;margin-top:5px}.auth-submit span{font-size:1.1rem}.auth-footnote{margin-top:3px;color:var(--color-muted);font-size:.72rem;text-align:center}.auth-mobile-brand{display:none}.auth-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.auth-form-wide{grid-column:1/-1}@media(max-width:760px){.auth-page{display:block;padding:0;background:var(--color-surface)}.auth-layout{display:block;width:100%;min-height:100dvh;border:0;border-radius:0;box-shadow:none}.auth-brand-panel{display:none}.auth-card{min-height:100dvh;padding:28px clamp(20px,7vw,42px)}.auth-mobile-brand{display:block;margin-bottom:24px}.auth-mobile-brand img{width:165px}.auth-form-grid{grid-template-columns:1fr}.auth-form-wide{grid-column:auto}}
 .app-shell.is-auth-screen{padding-left:0}
 @media(max-width:480px){.auth-page{padding:0}.auth-card{min-height:100dvh;align-content:start;padding:22px 20px calc(18px + env(safe-area-inset-bottom))}.auth-mobile-brand{margin-bottom:8px;text-align:center}.auth-mobile-brand img{width:100px}.auth-card p.eyebrow{margin-bottom:1px}.auth-card h1{margin-top:0;font-size:clamp(1.28rem,6vw,1.6rem);line-height:1.16;letter-spacing:-.03em}.auth-intro{margin-bottom:12px;font-size:.85rem;line-height:1.45}.auth-card form{gap:10px}.auth-card label{gap:4px;font-size:.78rem}.auth-card .input{min-height:44px;padding:9px 11px}.auth-card form .button{min-height:44px}.auth-submit{margin-top:2px}.auth-footnote{margin-top:10px;margin-bottom:0}.auth-message{padding:8px 10px;font-size:.78rem}.password-field .input{padding-right:40px}.auth-forgot-link{justify-self:start;margin-top:-2px}}

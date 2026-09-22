@@ -27,6 +27,7 @@ import { AuthService } from "./services/auth-service.js";
 import { AuthController } from "./controllers/auth-controller.js";
 import { ProfilesService } from "./services/profiles-service.js";
 import { ProfilesController } from "./controllers/profiles-controller.js";
+import { SignupAuthorizationsService } from "./services/signup-authorizations-service.js";
 import { AuditLogService } from "./services/audit-log-service.js";
 import { AuditLogController } from "./controllers/audit-log-controller.js";
 import { AboutController } from "./controllers/about-controller.js";
@@ -191,7 +192,7 @@ async function bootstrap() {
   const remoteRepository=await SupabaseStateRepository.create(supabase);
   const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
   controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents,externalNumbersRepository:repositories.externalNumbers,incidentsRepository:repositories.incidents,historyEventsRepository:repositories.historyEvents,currentProfile:authenticated.profile});
-  profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),content,currentProfile:authenticated.profile});
+  profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),authorizationsService:new SignupAuthorizationsService(repositories.signupAuthorizations),content,currentProfile:authenticated.profile});
   if(isAdminOrAbove(authenticated.profile)) auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
   document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!isAdminOrAbove(authenticated.profile);});
   document.querySelectorAll("[data-master-only]").forEach((item)=>{item.hidden=!isMaster(authenticated.profile);});

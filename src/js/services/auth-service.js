@@ -30,12 +30,25 @@ export class AuthService {
     return { session: data.session, profile };
   }
 
-  async register({ name, email, password, jobTitle, squadId }) {
+  /**
+   * Acesso e Squad não fazem mais parte do cadastro: quem define isso é a
+   * autorização prévia do MASTER (handle_new_user ignora squad_id do
+   * metadata e nunca aceita access_level vindo do cliente — só a que está
+   * associada ao e-mail em signup_authorizations).
+   */
+  async register({ name, email, password, jobTitle }) {
     return this.authRepository.signUp({
       email: String(email).trim(),
       password,
-      options: { data: { name: String(name).trim(), job_title: jobTitle, squad_id: squadId || null } },
+      options: { data: { name: String(name).trim(), job_title: jobTitle } },
     });
+  }
+
+  /** Verificação antecipada de UX — o cadastro em si é bloqueado no backend mesmo sem isso. */
+  async isEmailAuthorized(email) {
+    const value = String(email ?? "").trim();
+    if (!value) return false;
+    return this.authRepository.checkSignupAuthorization(value);
   }
 
   async signOut() {
@@ -51,6 +64,5 @@ export class AuthService {
     return this.authRepository.updatePassword(password);
   }
 
-  async listActiveSquads() { return this.authRepository.listRegistrationSquads(); }
   onAuthStateChange(callback) { return this.authRepository.onAuthStateChange(callback); }
 }

@@ -133,7 +133,8 @@
 
 :root[data-theme="dark"] .button-danger { color: #ffb4b4; background: #341c1c; }
 :root[data-theme="dark"] .button-danger:hover { background: #4a2525; }
-:root[data-theme="dark"] .form-message { color: #ffb4b4; background: #341c1c; border-color: rgb(255 107 107 / .3); }
+:root[data-theme="dark"] .form-message,
+:root[data-theme="dark"] .auth-message { color: #ffb4b4; background: #341c1c; border-color: rgb(255 107 107 / .3); }
 :root[data-theme="dark"] .backup-feedback,
 :root[data-theme="dark"] .backup-warning { color: #ffb4b4; background: #341c1c; border-color: rgb(255 107 107 / .3); }
 
@@ -201,5 +202,5 @@
 :root[data-theme="dark"] .bot-pending-list li { border-top-color: rgb(240 217 160 / .16); }
 :root[data-theme="dark"] tr.is-pending-row { background: rgb(240 217 160 / .07); }
 
-:root[data-theme="dark"] .table-scroll-fade-start { background: linear-gradient(to right, rgb(0 0 0 / .35), transparent); }
-:root[data-theme="dark"] .table-scroll-fade-end { background: linear-gradient(to left, rgb(0 0 0 / .35), transparent); }
+:root[data-theme="dark"] .table-scroll-fade-start { background: linear-gradient(to right, rgb(0 0 0 / .4), transparent); }
+:root[data-theme="dark"] .table-scroll-fade-end { background: linear-gradient(to left, rgb(0 0 0 / .4), transparent); }
