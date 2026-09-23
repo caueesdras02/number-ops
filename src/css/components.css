@@ -275,6 +275,26 @@ button.stage-trigger:focus-visible{outline:2px solid var(--color-focus-ring);out
 .searchable-select-listbox li[role="option"]:hover { background: var(--color-surface-muted); }
 .searchable-select-listbox li[role="option"][aria-selected="true"] { font-weight: 800; background: var(--color-primary-soft); }
 .searchable-select-empty { padding: 10px; color: var(--color-muted); font-size: .82rem; text-align: center; }
+
+/* Busca global (global-search.js) — Ctrl+K/Cmd+K ou o ícone ⌕ no topbar. Ancorada perto do topo
+   (não centralizada) de propósito: é um "command palette", abre já com o teclado em foco. */
+.global-search-backdrop { align-items: flex-start; padding-top: min(14vh, 120px); }
+.global-search-card { display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(70vh, 520px); padding: 0; overflow: hidden; }
+.global-search-input-row { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--color-border); color: var(--color-muted); font-size: 1.05rem; }
+.global-search-input { flex: 1; border: 0; color: var(--color-text); background: transparent; font: inherit; font-size: .95rem; }
+.global-search-input:focus { outline: 0; }
+.global-search-input-row kbd { padding: 2px 7px; border: 1px solid var(--color-border-strong); border-radius: 6px; color: var(--color-muted); background: var(--color-surface-muted); font-family: inherit; font-size: .7rem; font-weight: 700; }
+.global-search-results { overflow-y: auto; padding: 8px; }
+.global-search-group + .global-search-group { margin-top: 4px; }
+.global-search-group-label { padding: 8px 10px 4px; color: var(--color-muted); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.global-search-row { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px; border: 0; border-radius: 9px; color: var(--color-text); background: transparent; cursor: pointer; text-align: left; font: inherit; }
+.global-search-row.is-active, .global-search-row:hover { background: var(--color-surface-muted); }
+.global-search-row-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 8px; color: var(--color-primary-deep); background: var(--color-primary-soft); font-weight: 800; }
+.global-search-row-text { display: grid; min-width: 0; gap: 1px; }
+.global-search-row-text strong { overflow: hidden; font-size: .87rem; text-overflow: ellipsis; white-space: nowrap; }
+.global-search-row-text small { overflow: hidden; color: var(--color-muted); font-size: .74rem; text-overflow: ellipsis; white-space: nowrap; }
+.global-search-hint-text, .global-search-empty { padding: 24px 16px; color: var(--color-muted); font-size: .85rem; text-align: center; }
+@media (max-width: 600px) { .global-search-backdrop { padding: 16px; padding-top: 12px; } .global-search-card { max-height: 80vh; } }
 .app-shell[data-access-level="VIEWER"] [data-action="add"],.app-shell[data-access-level="VIEWER"] [data-action="edit"],.app-shell[data-access-level="VIEWER"] [data-action="archive"],.app-shell[data-access-level="VIEWER"] [data-action="restore"],.app-shell[data-access-level="VIEWER"] [data-action="review"],.app-shell[data-access-level="VIEWER"] [data-action="register-restriction"],.app-shell[data-access-level="VIEWER"] [data-action="remove-restriction"],.app-shell[data-access-level="VIEWER"] [data-action="manage-campaign"],.app-shell[data-access-level="VIEWER"] [data-action="end-campaign-link"],.app-shell[data-access-level="VIEWER"] [data-action="close"],.app-shell[data-access-level="VIEWER"] [data-action="close-campaign"],.app-shell[data-access-level="VIEWER"] [data-action="toggle"],.app-shell[data-access-level="VIEWER"] [data-action="reactivate"],.app-shell[data-access-level="VIEWER"] [data-action="add-links"],.app-shell[data-access-level="VIEWER"] [data-action="end-link"],.app-shell[data-access-level="VIEWER"] [data-action="add-links-inline"],.app-shell[data-access-level="VIEWER"] [data-action="remove-link-inline"],.app-shell[data-access-level="VIEWER"] [data-action="change-role"],.app-shell[data-access-level="VIEWER"] [data-action="bot-mark-not-owned"],.app-shell[data-access-level="VIEWER"] [data-action="bot-revert-not-owned"],.app-shell[data-access-level="VIEWER"] .bot-associate-details{display:none!important}
 @media(min-width:701px) and (max-width:1200px){.number-record{grid-template-columns:minmax(190px,.9fr) minmax(0,1.6fr)}.number-record>.record-actions{grid-column:1/-1;justify-content:start}}
 @media(max-width:520px){.directory-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.directory-actions .button{width:100%;min-width:0;padding-inline:7px}}

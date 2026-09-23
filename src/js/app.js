@@ -38,6 +38,7 @@ import { bindPushToggle } from "./ui/push-toggle.js";
 import { VAPID_PUBLIC_KEY } from "./config/supabase-runtime.js";
 import { observeTableScrollHints } from "./ui/table-scroll-hint.js";
 import { observeSearchableSelects } from "./ui/searchable-select.js";
+import { bindGlobalSearch } from "./ui/global-search.js";
 
 initTheme();
 bindThemeToggles();
@@ -53,6 +54,7 @@ const menuToggle=document.querySelector("[data-mobile-nav-toggle]");
 const mobileNavClose=document.querySelector("[data-mobile-nav-close]");
 const logoutButton=document.querySelector("[data-auth-logout]");
 let controllers=null;
+bindGlobalSearch({ trigger: document.querySelector("[data-global-search-trigger]"), getState: () => controllers?.numbersService?.state ?? { numbers: [], clients: [], groups: [], responsibles: [], locations: [], campaigns: [] } });
 let profilesController=null;
 let auditLogController=null;
 let internalRoutesEnabled=false;
@@ -112,8 +114,9 @@ async function initPush(repository,profileId) {
 // colide com um id real de número (createId sempre gera "number_<uuid>").
 function showView(viewName) {
   if(!controllers)return;
-  const [view,resourceId]=viewName.split("/");
+  const [view,resourceId,thirdSegment]=viewName.split("/");
   if(view==="dashboard")controllers.dashboard.render();
+  else if(view==="numbers"&&resourceId==="locations"&&thirdSegment)controllers.directories.locations.detail(thirdSegment);
   else if(view==="numbers"&&resourceId==="locations")controllers.directories.locations.render();
   else if(view==="numbers"&&resourceId)controllers.numbers.showDetail(resourceId);
   else if(view==="numbers")controllers.numbers.render();
@@ -122,6 +125,10 @@ function showView(viewName) {
   else if(view==="activity"&&auditLogController)auditLogController.render();
   else if(view==="activity"){window.location.hash="#dashboard";return;}
   else if(view==="bot")controllers.bot.render();
+  // Diretórios (Clientes/Squads/Colaboradores): "#tipo/id" abre direto no detalhe — mesmo padrão
+  // já usado por Números/Campanhas/Ocorrências. Sem isso, só dava pra abrir o detalhe clicando
+  // dentro da própria listagem (nada linkava direto pra um registro específico).
+  else if(controllers.directories[view]&&resourceId)controllers.directories[view].detail(resourceId);
   else if(controllers.directories[view])controllers.directories[view].render();
   else if(view==="incidents"&&resourceId)controllers.incidents.detail(resourceId);
   else if(view==="incidents")controllers.incidents.render();
