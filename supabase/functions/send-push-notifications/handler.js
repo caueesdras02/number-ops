@@ -3,10 +3,14 @@
 // (index.ts) só monta `deps` com chamadas reais ao Supabase (service_role)
 // e ao serviço de push (web-push/VAPID), e chama handleSendPushNotifications.
 //
-// Chamada só pelo gatilho do banco (migration 017, trigger em
-// public.incidents) — nunca confia no corpo recebido: sempre relê a
-// Ocorrência pelo id antes de decidir se notifica, e só notifica
-// classification=CONNECTIVITY + status=OPEN.
+// Chamada só por dois gatilhos do banco:
+// - migration 017 (trigger em public.incidents), com {incidentId} — nunca confia no corpo
+//   recebido: sempre relê a Ocorrência pelo id antes de decidir, e só notifica
+//   classification=CONNECTIVITY + status=OPEN.
+// - migration 022 (trigger em public.integration_events), com {unregisteredPhone}, quando o
+//   telefone que caiu nem está cadastrado em `numbers` — nesse caso não existe Ocorrência
+//   nenhuma pra reler (incidents.number_id é NOT NULL), então o texto é montado direto a
+//   partir do telefone recebido.
 const SECRET_HEADER = "x-push-trigger-secret";
 
 function formatPhoneForNotification(phone) {
@@ -23,6 +27,18 @@ export function buildNotificationPayload(incident) {
     title: "Número caiu",
     body: `${formatPhoneForNotification(incident.numberPhone)}${identification}${context}`,
     url: `./#incidents/${incident.id}`,
+  };
+}
+
+// Telefone caiu mas não está cadastrado em `numbers` — nunca vira Ocorrência (incidents.number_id
+// é NOT NULL/FK), então não existe incidentId nenhum pra reler aqui. O texto já avisa isso de cara
+// (pedido explícito: "já informa de cara que não está registrado"), e o link manda direto pra
+// Central do Bot, onde a associação pendente pode ser resolvida.
+export function buildUnregisteredNumberPayload(phone) {
+  return {
+    title: "Número caiu — não registrado",
+    body: `${formatPhoneForNotification(phone)} não está cadastrado no Number Ops. Associe ou marque como não pertencente à operação.`,
+    url: "./#bot",
   };
 }
 
@@ -50,17 +66,28 @@ export async function handleSendPushNotifications({ getHeader, rawBody, env, dep
   } catch {
     return { status: 400, body: { ok: false, reason: "invalid_json" } };
   }
-  const incidentId = payloadIn?.incidentId;
-  if (!incidentId) return { status: 400, body: { ok: false, reason: "missing_incident_id" } };
 
-  const incident = await deps.getIncidentContext(incidentId);
-  if (!incident) return { status: 404, body: { ok: false, reason: "incident_not_found" } };
-  if (!(incident.classification === "CONNECTIVITY" && incident.status === "OPEN")) {
-    return { status: 200, body: { ok: true, skipped: true, reason: "not_connectivity_open" } };
+  // Dois formatos de chamada: {incidentId} (queda de número JÁ cadastrado — gatilho
+  // notify_number_down, migration 017) ou {unregisteredPhone} (queda de telefone que não existe
+  // em `numbers`, então nunca vira Ocorrência — gatilho notify_unregistered_number, migration
+  // 022). Nunca os dois ao mesmo tempo; unregisteredPhone tem prioridade só porque é o caminho
+  // mais novo e mais restrito (não depende de reler nada do banco).
+  let notification;
+  if (payloadIn?.unregisteredPhone) {
+    notification = buildUnregisteredNumberPayload(payloadIn.unregisteredPhone);
+  } else {
+    const incidentId = payloadIn?.incidentId;
+    if (!incidentId) return { status: 400, body: { ok: false, reason: "missing_incident_id" } };
+
+    const incident = await deps.getIncidentContext(incidentId);
+    if (!incident) return { status: 404, body: { ok: false, reason: "incident_not_found" } };
+    if (!(incident.classification === "CONNECTIVITY" && incident.status === "OPEN")) {
+      return { status: 200, body: { ok: true, skipped: true, reason: "not_connectivity_open" } };
+    }
+    notification = buildNotificationPayload(incident);
   }
 
   const subscriptions = await deps.listSubscriptions();
-  const notification = buildNotificationPayload(incident);
 
   let sent = 0;
   let removed = 0;

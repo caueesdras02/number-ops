@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { handleSendPushNotifications, buildNotificationPayload } from "../supabase/functions/send-push-notifications/handler.js";
+import { handleSendPushNotifications, buildNotificationPayload, buildUnregisteredNumberPayload } from "../supabase/functions/send-push-notifications/handler.js";
 
 // ---------------------------------------------------------------------------
 // BLOCO 13 — envio de push quando uma Ocorrência de conectividade abre.
@@ -115,6 +115,43 @@ function makeRequest({ header = ENV.triggerSecret, body }) {
   assert.equal(payload.title, "Número caiu");
   assert.match(payload.body, /\+55 \(11\) 99999-9999/);
   assert.equal(payload.url, "./#incidents/i1");
+}
+
+// 8) unregisteredPhone -> envia pra todas as inscrições, SEM tentar reler nenhuma Ocorrência
+// (não existe uma: número não cadastrado nunca pode virar linha em incidents, FK NOT NULL)
+{
+  const deps = makeDeps({
+    subscriptions: [
+      { id: "sub1", endpoint: "https://push/1", p256dh: "p1", authKey: "a1" },
+      { id: "sub2", endpoint: "https://push/2", p256dh: "p2", authKey: "a2" },
+    ],
+  });
+  let contextCalled = false;
+  deps.getIncidentContext = async () => { contextCalled = true; return null; };
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { unregisteredPhone: "5511988887777" } }), deps });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.sent, 2);
+  assert.equal(contextCalled, false, "nunca tenta reler uma Ocorrência pra um telefone não cadastrado");
+  assert.equal(deps.sentTo[0].payload.title, "Número caiu — não registrado");
+  assert.match(deps.sentTo[0].payload.body, /\+55 \(11\) 98888-7777/);
+  assert.match(deps.sentTo[0].payload.body, /não está cadastrado/);
+  assert.equal(deps.sentTo[0].payload.url, "./#bot");
+}
+
+// 9) sem incidentId E sem unregisteredPhone -> 400 (comportamento de antes preservado)
+{
+  const deps = makeDeps();
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { someOtherField: true } }), deps });
+  assert.equal(result.status, 400);
+  assert.equal(result.body.reason, "missing_incident_id");
+}
+
+// 10) buildUnregisteredNumberPayload: telefone em formato inesperado não quebra o texto
+{
+  const payload = buildUnregisteredNumberPayload("");
+  assert.equal(payload.title, "Número caiu — não registrado");
+  assert.match(payload.body, /Número não identificado/);
+  assert.equal(payload.url, "./#bot");
 }
 
 console.log("Bloco 13 (envio de push / número caiu): todos os cenários passaram.");

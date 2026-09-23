@@ -144,6 +144,13 @@ function enhance(select) {
 
   select.parentNode.insertBefore(wrap, select);
 
+  // Mesmo ícone de lupa usado nos outros campos de busca do app (.search-field) — sem ele, o
+  // combobox parecia só um select fechado comum, sem deixar claro que dá pra digitar e filtrar.
+  const icon = document.createElement("span");
+  icon.className = "searchable-select-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "⌕";
+
   const input = document.createElement("input");
   input.type = "text";
   input.className = "input searchable-select-input";
@@ -163,7 +170,7 @@ function enhance(select) {
   clearButton.textContent = "×";
   clearButton.hidden = !select.value || !select.options[0] || select.options[0].value !== "";
 
-  wrap.append(input, clearButton);
+  wrap.append(icon, input, clearButton);
   wrap.appendChild(select);
   select.classList.add("searchable-select-native");
   select.tabIndex = -1;

@@ -8,7 +8,7 @@ export class IncidentsController {
   constructor({ service, numbers, content }) { this.service = service; this.numbers = numbers; this.content = content; this.filters = {}; }
 
   render() {
-    this.content.innerHTML = renderIncidents(this.service.list(this.filters), this.numbers.state.numbers, this.numbers.getResponsibles(), this.filters);
+    this.content.innerHTML = renderIncidents(this.service.list(this.filters), this.numbers.state.numbers, this.numbers.getResponsibles(), this.filters, this.numbers.state.campaigns, this.numbers.state.clients);
     this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.form());
     this.content.querySelectorAll('[data-filter]').forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
     this.content.querySelectorAll('[data-action="clear-filters"]').forEach((button) => button.addEventListener("click", () => { this.filters = {}; this.render(); }));
@@ -23,7 +23,7 @@ export class IncidentsController {
   detail(id) {
     const incident = this.service.get(id);
     if (!incident) return this.render();
-    this.content.innerHTML = renderIncidentDetail(incident, this.numbers.state.numbers, this.numbers.getResponsibles());
+    this.content.innerHTML = renderIncidentDetail(incident, this.numbers.state.numbers, this.numbers.getResponsibles(), this.numbers.state.campaigns, this.numbers.state.clients);
     this.content.querySelector('[data-action="back"]')?.addEventListener("click", () => this.render());
     this.content.querySelector('[data-action="edit"]')?.addEventListener("click", () => this.form(incident.id));
     this.content.querySelector('[data-action="toggle"]')?.addEventListener("click", () => this.toggle(incident.id, true));
