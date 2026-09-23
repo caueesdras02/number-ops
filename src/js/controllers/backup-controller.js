@@ -6,7 +6,7 @@ export class BackupController {
   constructor({ service, content }) { this.service = service; this.content = content; this.preview = null; this.message = ""; }
   render() {
     this.recovery = this.service.getRecoverySnapshot("before-test-data-cleanup") || this.service.getRecoverySnapshot("before-approved-spreadsheet-migration");
-    this.content.innerHTML = renderBackup(this.preview, this.message, this.recovery, this.service.getMigrationReport());
+    this.content.innerHTML = renderBackup(this.preview, this.message, this.recovery, this.service.getMigrationReport(), this.service.isSharedBackend);
     this.content.querySelector('[data-backup-export]')?.addEventListener("click", () => this.export());
     this.content.querySelector('[data-backup-recovery]')?.addEventListener("click", () => this.download(this.recovery, "Backup de recuperação baixado."));
     this.content.querySelector('[data-backup-file]')?.addEventListener("change", (event) => this.read(event.target.files[0]));
@@ -24,10 +24,13 @@ export class BackupController {
   }
   async restore() {
     if (!this.preview) return;
+    const scopeText = this.service.isSharedBackend
+      ? "Todos os dados COMPARTILHADOS da operação (visíveis pra toda a equipe) serão substituídos."
+      : "Todos os dados atuais deste navegador serão substituídos.";
     const confirmed = await confirmDialog(this.content, {
       icon: "!",
       title: "Restaurar este backup?",
-      bodyHtml: `<p>Todos os dados atuais deste navegador serão substituídos.</p>`,
+      bodyHtml: `<p>${scopeText}</p>`,
       confirmLabel: "Restaurar backup",
       tone: "danger",
     });
