@@ -17,7 +17,7 @@ import { CampaignsService } from "./services/campaigns-service.js";
 import { CampaignsController } from "./controllers/campaigns-controller.js";
 import { ApprovedSpreadsheetMigrationService } from "./services/approved-spreadsheet-migration-service.js";
 import { TestDataCleanupService } from "./services/test-data-cleanup-service.js";
-import { getViewTitle, renderView } from "./ui/views.js";
+import { getViewTitle } from "./ui/views.js";
 import { BotService } from "./services/bot-service.js";
 import { BotController } from "./controllers/bot-controller.js";
 import { createConfiguredSupabaseClient } from "./infra/supabase-client.js";
@@ -128,14 +128,11 @@ function showView(viewName) {
   else if(view==="history")controllers.history.render();
   else if(view==="guide")controllers.guide.render();
   else if(view==="backup")controllers.backup.render();
-  else if(views_has(view))content.innerHTML=renderView(view);
   else {window.location.hash="#dashboard";return;}
   title.textContent=getViewTitle(view);
   navigationLinks.forEach((link)=>link.classList.toggle("is-active",link.dataset.view===view));
   setMobileNavigation(false);
 }
-
-function views_has(view){return ["clients","groups","responsibles","locations","numbers","campaigns","incidents","history","guide","backup","dashboard","profiles","activity"].includes(view);}
 
 function currentView(){return window.location.hash.slice(1)||"dashboard";}
 function setMobileNavigation(open){appShell.classList.toggle("is-nav-open",open);menuToggle.setAttribute("aria-expanded",String(open));menuToggle.setAttribute("aria-label",open?"Fechar menu":"Abrir menu");}

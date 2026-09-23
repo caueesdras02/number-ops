@@ -1,8 +1,8 @@
-import { escapeHtml, nameFor } from "./number-presentation.js";
+import { escapeHtml, formatDateTime, nameFor } from "./number-presentation.js";
 import { ACCESS_LEVEL_LABELS } from "../models/access.js";
 
 const STATUS_LABELS = { PENDING: "Pendente", USED: "Utilizado", REVOKED: "Revogado" };
-const date = (value) => value ? new Date(value).toLocaleString("pt-BR") : "—";
+const date = formatDateTime;
 
 export function renderSignupAuthorizations(authorizations, squads) {
   const rows = authorizations.map((item) => `<tr><td><strong>${escapeHtml(item.email)}</strong></td><td><strong class="access-level access-${(item.access_level || "").toLowerCase()}">${ACCESS_LEVEL_LABELS[item.access_level] ?? escapeHtml(item.access_level || "—")}</strong></td><td>${escapeHtml(nameFor(squads, item.squad_id, "Sem Squad"))}</td><td><span class="status-badge ${item.status === "USED" ? "status-active" : item.status === "REVOKED" ? "status-inactive" : "status-warming"}">${STATUS_LABELS[item.status] ?? escapeHtml(item.status)}</span></td><td>${date(item.created_at)}</td><td class="table-actions">${item.status === "PENDING" ? `<button class="button button-danger" data-action="revoke-authorization" data-id="${item.id}">Revogar</button>` : '<span class="table-secondary">—</span>'}</td></tr>`).join("");

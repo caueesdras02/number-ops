@@ -1,8 +1,8 @@
-import { escapeHtml, formatPhone } from "./number-presentation.js";
+import { escapeHtml, formatDateTimeShort, formatPhone } from "./number-presentation.js";
 import { PROCESSING_STATUS_LABELS, EVENT_TYPE_LABELS, CLASSIFICATION_LABELS } from "../services/bot-service.js";
 
 const BOT_ART = "./src/assets/number-ops-bot-logo.jpeg";
-const date = (value) => (value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
+const date = formatDateTimeShort;
 export const phoneLabel = (digits) => (digits && (digits.length === 12 || digits.length === 13) ? formatPhone(digits) : (digits ? escapeHtml(digits) : "—"));
 
 const statusClass = { RECEIVED: "is-pending", MATCHED: "is-ok", LINKED_TO_INCIDENT: "is-ok", PENDING_ASSOCIATION: "is-warning", IGNORED: "is-muted", IGNORED_NOT_OWNED: "is-muted", ERROR: "is-error" };

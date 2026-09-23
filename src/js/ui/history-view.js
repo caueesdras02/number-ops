@@ -1,11 +1,11 @@
-import { displayTerminology, escapeHtml, formatPhone } from "./number-presentation.js";
+import { displayTerminology, escapeHtml, formatDateTime, formatPhone } from "./number-presentation.js";
 
 const eventLabels = {
   GROUP_ASSOCIATED: "Squad associado",
   GROUP_REMOVED: "Squad removido",
 };
 const label = (type) => eventLabels[type] ?? type.replaceAll("_", " ").toLocaleLowerCase("pt-BR");
-const date = (value) => new Date(value).toLocaleString("pt-BR");
+const date = formatDateTime;
 const formatValue = (value) => value === null ? "Não definido" : typeof value === "object" ? JSON.stringify(value) : String(value);
 const change = (metadata) => metadata?.previousValue !== undefined ? `<p class="history-change"><span>Anterior</span> ${escapeHtml(formatValue(metadata.previousValue))}<i>→</i><span>Novo</span> ${escapeHtml(formatValue(metadata.newValue))}</p>` : "";
 

@@ -1,8 +1,8 @@
-import { displayTerminology, escapeHtml } from "./number-presentation.js";
+import { displayTerminology, escapeHtml, formatDateTimeShort } from "./number-presentation.js";
 
 const labels = { ACTIVE: "Ativo", WARMING: "Em aquecimento", UNDER_REVIEW: "Em análise", BLOCKED: "Bloqueado", INACTIVE: "Inativo", OPEN: "Aberta", RESOLVED: "Resolvida" };
 const icons = { total: "⌘", available: "✓", inuse: "◆", warming: "◌", review: "!", blocked: "×", incidents: "↗", ACTIVE: "✓", WARMING: "◌", UNDER_REVIEW: "!", BLOCKED: "×", INACTIVE: "−" };
-const date = (v) => v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem data";
+const date = (v) => formatDateTimeShort(v, "Sem data");
 const phone = (numbers, id) => numbers.find((n) => n.id === id)?.phone || "Número não localizado";
 const empty = (title, text) => `<div class="dash-empty"><span>✓</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div></div>`;
 

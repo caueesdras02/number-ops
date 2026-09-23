@@ -1,4 +1,4 @@
-import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
+import { escapeHtml, formatDate, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
 import { matchesSearch } from "../models/search-match.js";
 
 const labels = { clients: "Clientes", groups: "Squads", responsibles: "Colaboradores", locations: "Localizações" };
@@ -6,7 +6,7 @@ const singular = { clients: "Cliente", groups: "Squad", responsibles: "Colaborad
 const icon = { clients: "◉", groups: "◇", responsibles: "♙", locations: "⌖" };
 const viewActionLabel = { clients: "Ver detalhes", groups: "Ver detalhes", responsibles: "Ver painel", locations: "Ver números" };
 const status = (number) => `<span class="status-badge status-${number.status.toLowerCase()}">${statusLabels[number.status]}</span>`;
-const date = (value) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
+const date = formatDate;
 const directorySubtitle = (type, item, groups, responsibles = []) =>
   type === "responsibles" ? `Squad: ${escapeHtml(nameFor(groups, item.squadId, item.team ? `${item.team} (sem vínculo)` : "Sem Squad"))}`
   : type === "clients" ? `Squad: ${escapeHtml(nameFor(groups, item.squadId, "Sem Squad"))}`

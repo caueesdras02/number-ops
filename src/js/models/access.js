@@ -9,8 +9,6 @@ export function isAdminOrAbove(profileOrLevel) { const level = levelOf(profileOr
 /** Qualquer nível operacional (MASTER/ADMIN/USER) — só VIEWER não pode. Mesmo tier de
  * escrita já usado em numbers/campaigns/incidents; não inventa um cargo novo. */
 export function canOperate(profileOrLevel) { return levelOf(profileOrLevel) !== "VIEWER" && levelOf(profileOrLevel) !== ""; }
-export function canManageAccessLevel(profileOrLevel) { return isMaster(profileOrLevel); }
-export function canHardDelete(profileOrLevel) { return isMaster(profileOrLevel); }
 
 /** Nível de acesso "efetivo" de um profile só é válido se o usuário estiver ativo. */
 export function activeMasters(profiles = []) {

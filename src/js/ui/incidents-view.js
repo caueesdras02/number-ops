@@ -1,13 +1,13 @@
 import { INCIDENT_TYPES } from "../config/constants.js";
-import { escapeHtml, formatPhone, nameFor } from "./number-presentation.js";
+import { escapeHtml, formatDateTime, formatPhone, nameFor } from "./number-presentation.js";
 
 export const INCIDENT_TYPE_LABELS = { RESTRICTION: "Restrição", FALL: "Queda", BLOCK: "Bloqueio", CHIP_ISSUE: "Problema no chip", DEVICE_ISSUE: "Problema no aparelho", CONNECTIVITY: "Conectividade", OTHER: "Outro" };
 const incidentStatus = (status) => `<span class="incident-status incident-${status.toLowerCase()}">${status === "OPEN" ? "Aberta" : "Resolvida"}</span>`;
 // Discreto: só aparece quando a ocorrência foi criada pela integração (Telegram) — nunca para as manuais.
 const botOrigin = (item) => item.origin === "TELEGRAM_BOT" ? `<span class="incident-bot-origin" title="Criada automaticamente pela integração com o Telegram">◈ via Telegram</span>` : "";
-const date = (value) => value ? new Date(value).toLocaleString("pt-BR") : "—";
+const date = formatDateTime;
 const numberFor = (numbers, id) => numbers.find((item) => item.id === id);
-const responsibleFor = (responsibles, id) => responsibles.find((item) => item.id === id)?.name || "Não definido";
+const responsibleFor = (responsibles, id) => nameFor(responsibles, id);
 // Campanha/cliente vinculados no momento da queda (o Bot resolve isso sozinho ao classificar o
 // alerta — ver campaign_id em supabase/functions/telegram-webhook). Só existe pra incidentes que
 // tiveram uma campanha ativa identificada; nunca aparece pra ocorrência manual sem esse vínculo.

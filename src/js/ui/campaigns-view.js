@@ -1,10 +1,10 @@
 import { getUtilization, UTILIZATION_LABELS } from "../models/number.js";
-import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
+import { escapeHtml, formatDate, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
 import { CAMPAIGN_STAGES, CAMPAIGN_STAGE_LABELS } from "../services/campaigns-service.js";
 const option = (item, selected) => `<option value="${item.id}" ${item.id === selected ? "selected" : ""}>${escapeHtml(item.name)}</option>`;
 const roleLabels = { PRIMARY: "Principal/Disparo", BACKUP: "Backup", SUPPORT: "Apoio" };
 const utilClass = { IN_USE: "is-in-use", AVAILABLE: "is-available", UNAVAILABLE: "is-unavailable" };
-const date = (value) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
+const date = formatDate;
 
 const stageCssSuffix = (value) => String(value || "CAPTACAO").toLowerCase().replace(/_/g, "-");
 

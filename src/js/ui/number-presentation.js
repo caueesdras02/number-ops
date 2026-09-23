@@ -22,6 +22,21 @@ export function nameFor(items, id, fallback = "Não definido") {
   return items.find((item) => item.id === id)?.name ?? fallback;
 }
 
+// Três formatos de data já usados espalhados pelo app (cada view reimplementava o seu) —
+// centralizados aqui, mesmo comportamento de antes em cada tela, só sem a duplicação.
+/** Data e hora, formato numérico completo (com segundos) — ex.: "23/09/2026 14:30:00". */
+export function formatDateTime(value, fallback = "—") {
+  return value ? new Date(value).toLocaleString("pt-BR") : fallback;
+}
+/** Data e hora, formato curto (sem segundos) — ex.: "23/09/2026 14:30". */
+export function formatDateTimeShort(value, fallback = "—") {
+  return value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : fallback;
+}
+/** Só a data — ex.: "23/09/2026". */
+export function formatDate(value, fallback = "—") {
+  return value ? new Date(value).toLocaleDateString("pt-BR") : fallback;
+}
+
 // Mantém eventos anteriores consistentes com a nomenclatura exibida hoje.
 export function displayTerminology(value = "") {
   return String(value)
