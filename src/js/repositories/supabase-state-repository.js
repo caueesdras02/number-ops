@@ -5,6 +5,18 @@ import { APP_STORAGE_KEY } from "../config/constants.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const check = ({ data, error }) => { if (error) throw error; return data; };
+// Filtro temporário: estas 4 linhas (vínculos "Apoio" de um teste em "Live do Líder") foram
+// excluídas de verdade em public.number_campaign_links (confirmado via SQL Editor: um SELECT
+// pelos ids não retorna nenhuma linha), mas o Supabase continuou devolvendo elas num fetch
+// fresco — reproduzido até em aba anônima, então não é cache de navegador nem service worker.
+// Filtra na leitura pra garantir que nunca aparecem na tela, seja qual for a causa raiz. Remover
+// esta lista (e este filtro) assim que confirmar, direto no banco, que elas não voltam mais.
+const GHOST_NUMBER_CAMPAIGN_LINK_IDS = new Set([
+  "campaign-link-958baec7-6dd1-4a74-9e2d-d658654cae6d",
+  "campaign-link-c460a781-c95f-490b-84b2-a713238b2a88",
+  "campaign-link-d7affcd0-c24c-4ba1-acf0-c2b91d123dfd",
+  "campaign-link-4acbed5e-0fcb-407e-a9c5-bc03e6c3137d",
+]);
 // Substitui Object.groupBy (indisponível em navegadores anteriores a 2024).
 const groupBy = (items, keyOf) => items.reduce((acc, item) => { const key = keyOf(item); (acc[key] ??= []).push(item); return acc; }, {});
 const camelNumber = (row, clientIds, groupIds, restriction) => ({ id:row.id,phone:row.phone,identification:row.identification,status:row.status,locationId:row.location_id,responsibleId:row.responsible_id,clientIds,groupIds,groupCount:row.group_count,notes:row.notes,restriction,archivedAt:row.archived_at,createdAt:row.created_at,updatedAt:row.updated_at });
@@ -27,7 +39,7 @@ export class SupabaseStateRepository {
       locations:rows.locations.map((row)=>({...named(row),responsibleId:row.responsible_id})),
       numbers:rows.numbers.map((row)=>camelNumber(row,(clientsByNumber[row.id]??[]).map((item)=>item.client_id),(squadsByNumber[row.id]??[]).map((item)=>item.squad_id),restrictionsByNumber[row.id]?.[0]?{kind:restrictionsByNumber[row.id][0].kind,description:restrictionsByNumber[row.id][0].description,recordedAt:restrictionsByNumber[row.id][0].recorded_at}:null)),
       campaigns:rows.campaigns.map((row)=>({id:row.id,name:row.name,clientId:row.client_id,squadId:row.squad_id,responsibleId:row.responsible_id,notes:row.notes,status:row.status,stage:row.stage??"CAPTACAO",startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
-      numberCampaignLinks:rows.number_campaign_links.map((row)=>({id:row.id,numberId:row.number_id,campaignId:row.campaign_id,role:row.role,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
+      numberCampaignLinks:rows.number_campaign_links.filter((row)=>!GHOST_NUMBER_CAMPAIGN_LINK_IDS.has(row.id)).map((row)=>({id:row.id,numberId:row.number_id,campaignId:row.campaign_id,role:row.role,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
       // origin/classification/campaignId/integrationEventId são só LEITURA aqui (exibição) —
       // nunca entram no mapeamento de escrita (sync/incidentRow), então um upsert feito pelo
       // frontend nunca sobrescreve o que a integração (Telegram) gravou nessas colunas.
