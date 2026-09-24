@@ -26,7 +26,7 @@ export class SupabaseStateRepository {
   constructor(client, state) { this.client=client; this.state=clone(state); this.previous=clone(state); this.pending=Promise.resolve(); }
 
   static async create(client) {
-    const tables=["numbers","clients","squads","responsibles","locations","incidents","restrictions","history_events","campaigns","number_campaign_links","number_clients","number_squads"];
+    const tables=["numbers","clients","squads","responsibles","locations","incidents","restrictions","history_events","campaigns","number_campaign_links","number_clients","number_squads","external_number_campaign_links"];
     const values=await Promise.all(tables.map(async(table)=>[table,check(await client.from(table).select("*"))]));
     const rows=Object.fromEntries(values);
     const clientsByNumber=groupBy(rows.number_clients,(item)=>item.number_id);
@@ -45,6 +45,10 @@ export class SupabaseStateRepository {
       // frontend nunca sobrescreve o que a integração (Telegram) gravou nessas colunas.
       incidents:rows.incidents.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,title:row.title,description:row.description,status:row.status,responsibleId:row.responsible_id,resolutionNotes:row.resolution_notes,resolvedById:row.resolved_by_id,resolvedAt:row.resolved_at,createdAt:row.created_at,updatedAt:row.updated_at,origin:row.origin,classification:row.classification,campaignId:row.campaign_id,integrationEventId:row.integration_event_id})),
       historyEvents:rows.history_events.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,description:row.description,previousValue:row.previous_value,newValue:row.new_value,metadata:row.metadata,occurredAt:row.occurred_at})),
+      // Só LEITURA aqui — a escrita é sempre via BotService/CampaignsController usando o
+      // repositório dedicado (nunca passa por sync() abaixo), mesmo espírito de incidents
+      // escritos diretamente pela integração Telegram sem esperar o diff-sync geral.
+      externalNumberCampaignLinks:rows.external_number_campaign_links.map((row)=>({id:row.id,externalNumberId:row.external_number_id,campaignId:row.campaign_id,phoneNormalized:row.phone_normalized,companyLabel:row.company_label,clientAccountLabel:row.client_account_label,linkedBy:row.linked_by,linkedAt:row.linked_at,endedBy:row.ended_by,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
     };
     return new SupabaseStateRepository(client,state);
   }

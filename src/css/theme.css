@@ -147,6 +147,7 @@
 :root[data-theme="dark"] .detail-restriction > div > span { color: #f0c79b; background: #4a3a1c; }
 :root[data-theme="dark"] .detail-restriction.is-empty { background: var(--color-surface); border-color: var(--color-border); }
 :root[data-theme="dark"] .restriction-badge { color: #f0c79b; background: #33260f; }
+:root[data-theme="dark"] .badge-external { color: #f0c79b; background: #33260f; }
 :root[data-theme="dark"] .detail-incident.is-open { background: #241515; }
 :root[data-theme="dark"] .number-record.is-attention { border-left-color: #e07c3a; }
 :root[data-theme="dark"] .incident-record.is-open { border-left-color: #e85c51; background: linear-gradient(90deg, #241515, var(--color-surface)); }

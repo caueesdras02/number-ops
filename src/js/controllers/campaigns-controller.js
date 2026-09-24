@@ -7,7 +7,7 @@ import { confirmDialog } from "../ui/confirm-dialog.js";
 import { canOperate } from "../models/access.js";
 import { matchesSearch } from "../models/search-match.js";
 export class CampaignsController {
-  constructor({ service, content, currentProfile = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; }
+  constructor({ service, content, currentProfile = null, externalLinksRepository = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; this.externalLinksRepository=externalLinksRepository; }
   // Diálogos reaproveitados nos 2-3 pontos que disparam a mesma ação (lista, detalhe, seletor de
   // Situação) — um só lugar pra manter o texto, nunca duplicado por cópia-e-cola.
   confirmCloseCampaign() {
@@ -143,8 +143,9 @@ export class CampaignsController {
   }
   detail(id) {
     const item=this.service.get(id);if(!item)return this.render();const state=this.service.state;
-    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||"")),canEdit:this.canEdit});
+    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||"")),externalLinks:(state.externalNumberCampaignLinks??[]).filter((link)=>link.campaignId===id).sort((a,b)=>(b.linkedAt||"").localeCompare(a.linkedAt||"")),canEdit:this.canEdit});
     this.bindStageTriggers();
+    this.content.querySelectorAll('[data-action="end-external-link"]').forEach((button)=>button.addEventListener("click",()=>this.endExternalLink(button.dataset.id,id)));
     this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{if(window.location.hash!=="#campaigns")window.location.hash="#campaigns";else this.render();});
     this.content.querySelector('[data-action="add-links"]')?.addEventListener("click",()=>this.openLinkForm(id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener("click",()=>this.hardDelete(id,true));
@@ -161,6 +162,21 @@ export class CampaignsController {
       try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
     }));
     this.content.querySelectorAll('[data-action="change-role"]').forEach((button)=>button.addEventListener("click",()=>this.openChangeRoleForm(id,button.dataset.numberId,button.dataset.role)));
+  }
+  /** Encerra o vínculo de um número EXTERNO (de cliente, não nosso — ver BotService.linkToCampaign)
+   * com esta campanha. Mesmo diálogo de confirmação e mesmo espírito do "Encerrar" de vínculo real
+   * (histórico preservado, nunca apaga a linha), mas escreve direto no repositório dedicado — este
+   * recurso nunca passa pelo diff-sync geral do CampaignsService, ver plano/decisão de arquitetura. */
+  async endExternalLink(linkId,campaignId) {
+    if(!this.externalLinksRepository)return;
+    if(!(await this.confirmEndLink()))return;
+    try{
+      await this.externalLinksRepository.update(linkId,{ended_at:new Date().toISOString(),ended_by:this.currentProfile?.id??null});
+      const link=this.service.state.externalNumberCampaignLinks?.find((item)=>item.id===linkId);
+      if(link)link.endedAt=new Date().toISOString();
+      showToast("Vínculo encerrado.","warning");
+      this.detail(campaignId);
+    }catch(error){showToast(error.message,"error");}
   }
   openChangeRoleForm(campaignId,numberId,currentRole) {
     const campaign=this.service.get(campaignId);const number=this.service.state.numbers.find((item)=>item.id===numberId);

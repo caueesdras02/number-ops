@@ -60,7 +60,7 @@ let auditLogController=null;
 let internalRoutesEnabled=false;
 new AboutController({trigger:document.querySelector("[data-about-open]")}).bind();
 
-function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null,integrationEventsRepository=null,externalNumbersRepository=null,incidentsRepository=null,historyEventsRepository=null,currentProfile=null}={}) {
+function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null,integrationEventsRepository=null,externalNumbersRepository=null,incidentsRepository=null,historyEventsRepository=null,externalNumberCampaignLinksRepository=null,currentProfile=null}={}) {
   const numbersService=new NumbersService(repository,{hardDeletePort});
   if(runLegacyMaintenance) {
     const migration=new ApprovedSpreadsheetMigrationService(numbersService).run();
@@ -74,7 +74,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
   return {
     numbersService,
     numbers:new NumbersController({service:numbersService,campaignsService,content}),
-    campaigns:new CampaignsController({service:campaignsService,content,currentProfile}),
+    campaigns:new CampaignsController({service:campaignsService,content,currentProfile,externalLinksRepository:externalNumberCampaignLinksRepository}),
     directories:Object.fromEntries(["clients","groups","responsibles","locations"].map((type)=>[type,new DirectoryController({service:directoryService,campaignsService,content,type})])),
     incidents:new IncidentsController({service:new IncidentsService(numbersService,new HistoryService(numbersService)),numbers:numbersService,content}),
     history:new HistoryController({service:new HistoryService(numbersService),numbers:numbersService,content}),
@@ -83,7 +83,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     backup:new BackupController({service:new BackupService(numbersService),content}),
     // Central Number Ops Bot — leitura. Sem repository (modo local/offline) ela
     // mesma mostra um estado "indisponível", sem quebrar a rota.
-    bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,numbersService,currentProfile}),content}),
+    bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,externalNumberCampaignLinksRepository,numbersService,currentProfile}),content}),
   };
 }
 
@@ -197,7 +197,7 @@ async function bootstrap() {
   content.innerHTML='<section class="directory-empty"><div><h2>Carregando dados compartilhados…</h2><p>Sincronizando com o Supabase.</p></div></section>';
   const remoteRepository=await SupabaseStateRepository.create(supabase);
   const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
-  controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents,externalNumbersRepository:repositories.externalNumbers,incidentsRepository:repositories.incidents,historyEventsRepository:repositories.historyEvents,currentProfile:authenticated.profile});
+  controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents,externalNumbersRepository:repositories.externalNumbers,incidentsRepository:repositories.incidents,historyEventsRepository:repositories.historyEvents,externalNumberCampaignLinksRepository:repositories.externalNumberCampaignLinks,currentProfile:authenticated.profile});
   profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),authorizationsService:new SignupAuthorizationsService(repositories.signupAuthorizations),content,currentProfile:authenticated.profile});
   if(isAdminOrAbove(authenticated.profile)) auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
   document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!isAdminOrAbove(authenticated.profile);});

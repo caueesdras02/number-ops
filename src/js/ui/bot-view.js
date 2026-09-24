@@ -131,6 +131,43 @@ function numberPickerRow(number) {
   return `<label class="check-option link-role-row" data-relation-option><span class="link-role-check"><input type="radio" name="numberId" value="${number.id}" required><span>${label}</span></span></label>`;
 }
 
+/** Campanhas às quais este número externo JÁ está vinculado (BotService.enrich) — link direto pra
+ * cada uma (mesmo data-action="open-campaign" que o resto da tela já usa). */
+function existingExternalLinksNote(event) {
+  const links = event.existingExternalLinks ?? [];
+  if (!links.length) return "";
+  const rows = links.map((link) => `<li class="derived-list-item"><span><button class="link-button" type="button" data-action="open-campaign" data-id="${link.campaignId}">${escapeHtml(link.campaignName ?? link.campaignId)}</button>${link.clientName ? ` · ${escapeHtml(link.clientName)}` : ""}</span></li>`).join("");
+  return `<div class="bot-detail-note"><p>Já vinculado ${links.length > 1 ? "às campanhas" : "à campanha"}:</p><ul class="derived-list">${rows}</ul></div>`;
+}
+
+function campaignPickerRow(campaign) {
+  const label = `${escapeHtml(campaign.name)}${campaign.clientName ? ` · ${escapeHtml(campaign.clientName)}` : ""}`;
+  return `<label class="check-option link-role-row" data-relation-option><span class="link-role-check"><input type="radio" name="campaignId" value="${campaign.id}" required><span>${label}</span></span></label>`;
+}
+
+/** Vincula um número JÁ classificado como externo (IGNORED_NOT_OWNED) a uma Campanha existente —
+ * nunca cria Campanha nova. Mesmo padrão visual/de busca de pendingActions/numberPickerRow, só
+ * trocando "número" por "campanha ativa"; busca pré-preenchida com o Liveshop do alerta pra
+ * facilitar achar uma campanha já existente com nome parecido (bot-controller.js reaproveita o
+ * mesmo filtro data-link-search já usado no form de associar número). */
+function notOwnedLinkActions(event, { canModify, availableCampaigns }) {
+  if (event.processingStatus !== "IGNORED_NOT_OWNED" || !canModify) return "";
+  const rows = availableCampaigns.map(campaignPickerRow).join("");
+  const prefill = event.metadata?.liveshop || "";
+  return `<div class="bot-detail-actions">
+    <details class="bot-associate-details">
+      <summary class="button button-primary">Vincular à campanha</summary>
+      <form class="number-form bot-link-campaign-form" data-bot-link-campaign-form data-id="${event.id}">
+        <label class="form-full">Buscar campanha já cadastrada<input class="input" type="search" data-link-search value="${escapeHtml(prefill)}" placeholder="Buscar por nome da campanha" autocomplete="off"></label>
+        <fieldset class="link-role-list" data-link-options>${rows || '<p class="table-secondary">Nenhuma campanha ativa disponível para vincular.</p>'}</fieldset>
+        <p class="relation-empty-hint" data-link-empty hidden>Nenhuma campanha encontrada.</p>
+        <small class="form-hint">Vincula este número (que não é nosso) à campanha e ao cliente escolhidos — nenhuma campanha nova é criada aqui.</small>
+        <div class="form-actions"><button class="button button-primary" type="submit">Vincular</button></div>
+      </form>
+    </details>
+  </div>`;
+}
+
 function pendingActions(event, { canModify, availableNumbers }) {
   if (event.processingStatus !== "PENDING_ASSOCIATION" || !canModify) return "";
   const rows = availableNumbers.map(numberPickerRow).join("");
@@ -155,7 +192,7 @@ function revertAction(event, { canModify }) {
   return `<div class="bot-detail-actions"><button class="button button-quiet" type="button" data-action="bot-revert-not-owned" data-external-id="${record.id}">Reverter classificação de externo</button></div>`;
 }
 
-export function renderBotEventDetail(event, { canModify = false, availableNumbers = [] } = {}) {
+export function renderBotEventDetail(event, { canModify = false, availableNumbers = [], availableCampaigns = [] } = {}) {
   const campaignNote = !event.numberId ? "Não aplicável — número não foi encontrado." : event.metadata?.campaignMatch === "ambiguous" ? "Ambíguo entre mais de uma campanha ativa — não associado automaticamente." : event.metadata?.campaignMatch === "none" ? "Número sem campanha ativa vinculada." : "Ainda não associada.";
   const steps = [
     timelineStep({ done: true, icon: "1", title: "Recebido", description: `Evento recebido via Telegram em ${date(event.receivedAt)}.` }),
@@ -171,5 +208,5 @@ export function renderBotEventDetail(event, { canModify = false, availableNumber
   if (event.campaignId) links.push(`<button class="button button-quiet" type="button" data-action="open-campaign" data-id="${event.campaignId}">Ver campanha</button>`);
   if (event.linkedIncidentId) links.push(`<button class="button button-quiet" type="button" data-action="open-incident" data-id="${event.linkedIncidentId}">Ver ocorrência</button>`);
 
-  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${alertInfoBlock(event)}${notOwnedNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${revertAction(event, { canModify })}</article></div>`;
+  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${alertInfoBlock(event)}${notOwnedNote(event)}${existingExternalLinksNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${notOwnedLinkActions(event, { canModify, availableCampaigns })}${revertAction(event, { canModify })}</article></div>`;
 }

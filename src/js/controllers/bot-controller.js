@@ -34,7 +34,14 @@ export class BotController {
     const availableNumbers = this.service.numbers.state.numbers
       .filter((number) => !number.archivedAt)
       .sort((a, b) => a.phone.localeCompare(b.phone));
-    this.content.insertAdjacentHTML("beforeend", renderBotEventDetail(event, { canModify: this.data.canModify, availableNumbers }));
+    // Só campanhas ATIVAS, com o nome do Cliente já resolvido, excluindo as que este número
+    // externo já está vinculado (evita oferecer "vincular de novo" à mesma campanha).
+    const alreadyLinkedIds = new Set((event.existingExternalLinks ?? []).map((link) => link.campaignId));
+    const availableCampaigns = this.service.numbers.state.campaigns
+      .filter((campaign) => campaign.status === "ACTIVE" && !alreadyLinkedIds.has(campaign.id))
+      .map((campaign) => ({ ...campaign, clientName: this.service.numbers.state.clients.find((client) => client.id === campaign.clientId)?.name ?? "" }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    this.content.insertAdjacentHTML("beforeend", renderBotEventDetail(event, { canModify: this.data.canModify, availableNumbers, availableCampaigns }));
     const modal = this.content.querySelector("[data-bot-modal]");
     const close = () => modal?.remove();
     modal?.querySelector('[data-action="close-bot-detail"]')?.addEventListener("click", close);
@@ -90,20 +97,40 @@ export class BotController {
       } catch (error) { showToast(error.message, "error"); }
     });
 
-    const form = modal.querySelector("[data-bot-associate-form]");
-    form?.querySelector("[data-link-search]")?.addEventListener("input", (inputEvent) => {
-      const rows = [...form.querySelectorAll("[data-relation-option]")];
-      let visible = 0;
-      rows.forEach((row) => { const matches = matchesSearch(row.textContent, inputEvent.target.value); row.hidden = !matches; if (matches) visible++; });
-      const empty = form.querySelector("[data-link-empty]");
-      if (empty) empty.hidden = visible !== 0 || rows.length === 0;
+    // Filtro de busca reaproveitado por QUALQUER form de picker no modal (associar número e
+    // vincular campanha) — cada um com seu próprio [data-link-search]/[data-relation-option].
+    modal.querySelectorAll("[data-link-search]").forEach((searchInput) => {
+      const form = searchInput.closest("form");
+      const applyFilter = () => {
+        const rows = [...form.querySelectorAll("[data-relation-option]")];
+        let visible = 0;
+        rows.forEach((row) => { const matches = matchesSearch(row.textContent, searchInput.value); row.hidden = !matches; if (matches) visible++; });
+        const empty = form.querySelector("[data-link-empty]");
+        if (empty) empty.hidden = visible !== 0 || rows.length === 0;
+      };
+      searchInput.addEventListener("input", applyFilter);
+      if (searchInput.value) applyFilter(); // busca pré-preenchida (ex.: Liveshop do alerta) já filtra ao abrir
     });
+
+    const form = modal.querySelector("[data-bot-associate-form]");
     form?.addEventListener("submit", (submitEvent) => guardedSubmit(form, submitEvent, async () => {
       const numberId = new FormData(form).get("numberId");
       if (!numberId) { showToast("Selecione um número.", "error"); return; }
       try {
         await this.service.associateNumber(event.id, numberId, event);
         showToast("Número associado — pipeline reprocessado.", "success");
+        modal.remove();
+        await this.render();
+      } catch (error) { showToast(error.message, "error"); }
+    }));
+
+    const linkCampaignForm = modal.querySelector("[data-bot-link-campaign-form]");
+    linkCampaignForm?.addEventListener("submit", (submitEvent) => guardedSubmit(linkCampaignForm, submitEvent, async () => {
+      const campaignId = new FormData(linkCampaignForm).get("campaignId");
+      if (!campaignId) { showToast("Selecione uma campanha.", "error"); return; }
+      try {
+        await this.service.linkToCampaign(event.id, campaignId, event);
+        showToast("Número vinculado à campanha.", "success");
         modal.remove();
         await this.render();
       } catch (error) { showToast(error.message, "error"); }
