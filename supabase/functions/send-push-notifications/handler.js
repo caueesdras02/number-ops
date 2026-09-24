@@ -42,14 +42,26 @@ export function buildUnregisteredNumberPayload(phone) {
   };
 }
 
+// Preferência de Squad por inscrição (migration 024, push_subscription_squads): array VAZIO
+// (ou ausente) em subscriptionSquadIds sempre significa "sem filtro, quer tudo" — mesmo
+// comportamento de hoje pra quem nunca configurou nada. numberSquadIds vazio/ausente (número não
+// cadastrado — unregisteredPhone nunca tem incidentId nem Número pra reler — ou Número sem Squad)
+// também sempre é elegível: não há como filtrar por Squad o que não tem Squad nenhum, e suprimir
+// esse alerta pra todo mundo seria pior do que mandar sem filtro.
+export function isEligibleForSquads(subscriptionSquadIds, numberSquadIds) {
+  if (!subscriptionSquadIds?.length) return true;
+  if (!numberSquadIds?.length) return true;
+  return subscriptionSquadIds.some((id) => numberSquadIds.includes(id));
+}
+
 /**
  * @param {object} params
  * @param {(name: string) => string|null} params.getHeader
  * @param {string} params.rawBody
  * @param {{ triggerSecret: string }} params.env
  * @param {{
- *   getIncidentContext: (id: string) => Promise<null|{id:string,classification:string,status:string,numberPhone:string|null,numberIdentification:string|null,campaignName:string|null,clientName:string|null}>,
- *   listSubscriptions: () => Promise<Array<{id:string,endpoint:string,p256dh:string,authKey:string}>>,
+ *   getIncidentContext: (id: string) => Promise<null|{id:string,classification:string,status:string,numberPhone:string|null,numberIdentification:string|null,campaignName:string|null,clientName:string|null,numberSquadIds?:string[]}>,
+ *   listSubscriptions: () => Promise<Array<{id:string,endpoint:string,p256dh:string,authKey:string,squadIds?:string[]}>>,
  *   sendPush: (subscription: object, payload: object) => Promise<void>,
  *   deleteSubscription: (id: string) => Promise<void>,
  * }} params.deps
@@ -73,6 +85,7 @@ export async function handleSendPushNotifications({ getHeader, rawBody, env, dep
   // 022). Nunca os dois ao mesmo tempo; unregisteredPhone tem prioridade só porque é o caminho
   // mais novo e mais restrito (não depende de reler nada do banco).
   let notification;
+  let numberSquadIds = [];
   if (payloadIn?.unregisteredPhone) {
     notification = buildUnregisteredNumberPayload(payloadIn.unregisteredPhone);
   } else {
@@ -85,9 +98,14 @@ export async function handleSendPushNotifications({ getHeader, rawBody, env, dep
       return { status: 200, body: { ok: true, skipped: true, reason: "not_connectivity_open" } };
     }
     notification = buildNotificationPayload(incident);
+    numberSquadIds = incident.numberSquadIds ?? [];
   }
 
-  const subscriptions = await deps.listSubscriptions();
+  const allSubscriptions = await deps.listSubscriptions();
+  // Preferência de Squad (migration 024) — quem escolheu Squads específicos só recebe quando o
+  // Número que caiu está em algum deles; sem preferência (ou sem Squad pra filtrar) continua
+  // recebendo tudo, mesmo comportamento de antes desta preferência existir.
+  const subscriptions = allSubscriptions.filter((subscription) => isEligibleForSquads(subscription.squadIds, numberSquadIds));
 
   let sent = 0;
   let removed = 0;

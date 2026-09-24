@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { handleSendPushNotifications, buildNotificationPayload, buildUnregisteredNumberPayload } from "../supabase/functions/send-push-notifications/handler.js";
+import { handleSendPushNotifications, buildNotificationPayload, buildUnregisteredNumberPayload, isEligibleForSquads } from "../supabase/functions/send-push-notifications/handler.js";
 
 // ---------------------------------------------------------------------------
 // BLOCO 13 — envio de push quando uma Ocorrência de conectividade abre.
@@ -152,6 +152,52 @@ function makeRequest({ header = ENV.triggerSecret, body }) {
   assert.equal(payload.title, "Número caiu — não registrado");
   assert.match(payload.body, /Número não identificado/);
   assert.equal(payload.url, "./#bot");
+}
+
+// 11) isEligibleForSquads: sem preferência = tudo; sem squad no número = tudo; interseção decide
+{
+  assert.equal(isEligibleForSquads([], ["squadA"]), true, "sem preferência salva, sempre elegível");
+  assert.equal(isEligibleForSquads(undefined, ["squadA"]), true);
+  assert.equal(isEligibleForSquads(["squadA"], []), true, "número sem Squad pra filtrar, sempre elegível (não suprime alerta)");
+  assert.equal(isEligibleForSquads(["squadA"], undefined), true);
+  assert.equal(isEligibleForSquads(["squadA"], ["squadA"]), true);
+  assert.equal(isEligibleForSquads(["squadA"], ["squadB"]), false);
+  assert.equal(isEligibleForSquads(["squadA", "squadB"], ["squadB", "squadC"]), true, "qualquer interseção já elegibiliza");
+  assert.equal(isEligibleForSquads(["squadA"], ["squadB", "squadC"]), false);
+}
+
+// 12) preferência de Squad filtra quem recebe: só quem escolheu o Squad do número (ou não escolheu nenhum) recebe
+{
+  const deps = makeDeps({
+    incidents: { i1: { id: "i1", classification: "CONNECTIVITY", status: "OPEN", numberPhone: "5511999999999", numberSquadIds: ["squad-norte"] } },
+    subscriptions: [
+      { id: "sub-sem-preferencia", endpoint: "https://push/1", p256dh: "p", authKey: "a", squadIds: [] },
+      { id: "sub-squad-certo", endpoint: "https://push/2", p256dh: "p", authKey: "a", squadIds: ["squad-norte"] },
+      { id: "sub-squad-errado", endpoint: "https://push/3", p256dh: "p", authKey: "a", squadIds: ["squad-sul"] },
+    ],
+  });
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { incidentId: "i1" } }), deps });
+  assert.equal(result.body.sent, 2, "só sem-preferência e squad-certo recebem");
+  assert.deepEqual(deps.sentTo.map((s) => s.subscriptionId).sort(), ["sub-sem-preferencia", "sub-squad-certo"]);
+}
+
+// 13) número sem nenhum Squad cadastrado -> filtro de Squad não suprime ninguém (continua notificando de tudo)
+{
+  const deps = makeDeps({
+    incidents: { i1: { id: "i1", classification: "CONNECTIVITY", status: "OPEN", numberPhone: "5511999999999", numberSquadIds: [] } },
+    subscriptions: [{ id: "sub1", endpoint: "https://push/1", p256dh: "p", authKey: "a", squadIds: ["squad-norte"] }],
+  });
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { incidentId: "i1" } }), deps });
+  assert.equal(result.body.sent, 1);
+}
+
+// 14) unregisteredPhone nunca tem Squad pra filtrar -> sempre notifica de tudo, mesmo com preferências configuradas
+{
+  const deps = makeDeps({
+    subscriptions: [{ id: "sub1", endpoint: "https://push/1", p256dh: "p", authKey: "a", squadIds: ["squad-norte"] }],
+  });
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { unregisteredPhone: "5511988887777" } }), deps });
+  assert.equal(result.body.sent, 1);
 }
 
 console.log("Bloco 13 (envio de push / número caiu): todos os cenários passaram.");

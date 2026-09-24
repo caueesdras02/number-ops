@@ -5,7 +5,8 @@ import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { canOperate } from "../models/access.js";
-import { matchesSearch } from "../models/search-match.js";
+import { matchesSearch, normalizeSearchText } from "../models/search-match.js";
+import { takePendingCampaignPrefill } from "../models/pending-campaign-prefill.js";
 export class CampaignsController {
   constructor({ service, content, currentProfile = null, externalLinksRepository = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; this.externalLinksRepository=externalLinksRepository; }
   // Diálogos reaproveitados nos 2-3 pontos que disparam a mesma ação (lista, detalhe, seletor de
@@ -59,6 +60,11 @@ export class CampaignsController {
     this.content.querySelector('[data-action="situacao-filter"]')?.addEventListener("change",(event)=>{this.applySituacaoFilter(event.target.value);this.render();});
     this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;})); // linhas do relatório de vínculos faltando (gap-report), não muda com a busca
     this.bindListActions();
+    // Veio da Central Number Ops Bot ("Campanha ainda não existe? Criar nova") — abre o form de
+    // Nova Campanha já pré-preenchido. take() consome e limpa: só abre nesta primeira renderização
+    // depois do clique, nunca de novo num render() seguinte não relacionado.
+    const prefill=takePendingCampaignPrefill();
+    if(prefill)this.openForm(null,{prefill});
   }
   /** Delegado no <tbody> (um listener só, não um por botão/linha): continua funcionando depois
    * que renderResults() troca o innerHTML das linhas a cada busca, sem precisar religar nada.
@@ -207,9 +213,19 @@ export class CampaignsController {
       if(fromDetail)window.location.hash="#campaigns";else this.render();
     }catch(error){showToast(error.message,"error");}
   }
-  openForm(id=null) {
+  openForm(id=null,{prefill=null}={}) {
     const state=this.service.state;
-    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive),numbers:state.numbers,links:id?this.service.activeLinksForCampaign(id):[]}));
+    const activeClients=state.clients.filter((item)=>item.isActive);
+    let item=id?this.service.get(id):{};
+    if(!id&&prefill){
+      // Empresa do alerta bate com o NOME de um Cliente já ativo (comparação exata, sem
+      // acento/maiúscula) -> pré-seleciona (Squad já deriva sozinho, ver syncSquadFromClient
+      // abaixo). Sem bater, o formulário mostra o texto do alerta como dica pra buscar manualmente
+      // — nunca cria Cliente novo aqui, mesma regra de nunca criar Campanha sozinho.
+      const matchedClient=prefill.empresa?activeClients.find((client)=>normalizeSearchText(client.name)===normalizeSearchText(prefill.empresa)):null;
+      item={name:prefill.name||"",clientId:matchedClient?.id||""};
+    }
+    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item,clients:activeClients,squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive),numbers:state.numbers,links:id?this.service.activeLinksForCampaign(id):[],prefillHint:id?null:prefill}));
     const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     this.content.querySelector('[data-action="add-links-inline"]')?.addEventListener("click",()=>{close();this.openLinkForm(id,{onDone:()=>this.openForm(id)});});

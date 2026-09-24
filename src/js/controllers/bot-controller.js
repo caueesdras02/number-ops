@@ -4,6 +4,7 @@ import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { matchesSearch } from "../models/search-match.js";
+import { setPendingCampaignPrefill } from "../models/pending-campaign-prefill.js";
 
 export class BotController {
   constructor({ service, content }) { this.service = service; this.content = content; this.filters = {}; this.data = null; }
@@ -135,5 +136,16 @@ export class BotController {
         await this.render();
       } catch (error) { showToast(error.message, "error"); }
     }));
+
+    // Leva Nome (Liveshop)/Empresa/Conta do Cliente do alerta pro form de Nova Campanha em
+    // Campanhas — nunca cria a campanha aqui, só evita redigitar o que o Telegram já mandou.
+    modal.querySelector('[data-action="bot-create-campaign"]')?.addEventListener("click", () => {
+      setPendingCampaignPrefill({
+        name: event.metadata?.liveshop || "",
+        empresa: event.metadata?.empresa || "",
+        contaCliente: event.metadata?.contaCliente || "",
+      });
+      window.location.hash = "#campaigns";
+    });
   }
 }

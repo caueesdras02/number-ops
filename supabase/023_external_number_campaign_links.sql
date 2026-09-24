@@ -11,7 +11,7 @@ begin;
 create table public.external_number_campaign_links (
   id text primary key default ('external_campaign_link_' || gen_random_uuid()::text),
   external_number_id text not null references public.external_numbers(id) on delete cascade,
-  campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  campaign_id text not null references public.campaigns(id) on delete cascade,
   -- Mesma forma canônica de external_numbers.phone_normalized/public.numbers.phone.
   phone_normalized text not null check (phone_normalized ~ '^55[0-9]{10,11}$'),
   company_label text,        -- "Empresa" do alerta do Telegram, no momento do vínculo.

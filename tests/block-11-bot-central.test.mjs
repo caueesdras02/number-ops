@@ -127,7 +127,10 @@ const fakeNumbersService = (state) => ({ state });
 
 // 8) Empresa/Liveshop/Conta do Cliente do alerta Telegram aparecem mesmo sem número/campanha
 //    cadastrados aqui (evento IGNORED_NOT_OWNED ou PENDING_ASSOCIATION) — esse dado já vem no
-//    texto do alerta e não pode "sumir" só porque não houve vínculo formal ainda.
+//    texto do alerta e não pode "sumir" só porque não houve vínculo formal ainda. Coluna Número
+//    usa o MESMO texto "Não encontrado" pra IGNORED_NOT_OWNED e PENDING_ASSOCIATION (a distinção
+//    real já está na coluna Status — não repete com textos diferentes), e a coluna Campanha
+//    mostra o nome do Liveshop puro, sem prefixo "Liveshop:".
 {
   const notOwnedEvent = {
     id: "e1", eventType: "CONNECTIVITY_ALERT", processingStatus: "IGNORED_NOT_OWNED", phoneNormalized: "5581914101890",
@@ -136,8 +139,13 @@ const fakeNumbersService = (state) => ({ state });
     receivedAt: "2026-01-01T00:00:00.000Z",
   };
   const tableHtml = renderBotCentral({ available: true, events: [notOwnedEvent], metrics: { total: 1, matched: 0, pending: 0, openConnectivity: 0, lastEvent: notOwnedEvent }, filters: {} });
-  assert.match(tableHtml, /Conta: Dhenny novo/, "conta do cliente aparece na coluna Número mesmo sem número cadastrado");
-  assert.match(tableHtml, /Liveshop: Mega Feirão de fábrica/, "liveshop aparece na coluna Campanha mesmo sem campanha cadastrada");
+  assert.match(tableHtml, /Não encontrado — Conta do Cliente: Dhenny novo/, "coluna Número: rótulo único + conta do cliente, sem duplicar a distinção da coluna Status");
+  assert.match(tableHtml, />Mega Feirão de fábrica</, "coluna Campanha mostra só o nome do Liveshop, sem o prefixo \"Liveshop:\"");
+  assert.doesNotMatch(tableHtml, /Liveshop: /, "nunca mais mostra o prefixo \"Liveshop:\" na tabela");
+
+  const pendingEvent = { ...notOwnedEvent, id: "e2", processingStatus: "PENDING_ASSOCIATION" };
+  const pendingHtml = renderBotCentral({ available: true, events: [pendingEvent], metrics: { total: 1, matched: 0, pending: 1, openConnectivity: 0, lastEvent: pendingEvent }, filters: {} });
+  assert.match(pendingHtml, /Não encontrado — Conta do Cliente: Dhenny novo/, "mesmo texto pra PENDING_ASSOCIATION — padronizado com IGNORED_NOT_OWNED");
 
   const detailHtml = renderBotEventDetail(notOwnedEvent, { canModify: true, availableNumbers: [] });
   assert.match(detailHtml, /Zig Online/, "empresa aparece no detalhe do evento");

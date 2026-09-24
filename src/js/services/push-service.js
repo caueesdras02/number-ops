@@ -15,7 +15,7 @@ export function urlBase64ToUint8Array(base64String) {
 }
 
 export class PushService {
-  constructor({ pushManager = null, requestPermission = null, getPermission = null, repository = null, profileId = null, vapidPublicKey = "", userAgent = "" } = {}) {
+  constructor({ pushManager = null, requestPermission = null, getPermission = null, repository = null, squadsRepository = null, profileId = null, vapidPublicKey = "", userAgent = "" } = {}) {
     this.pushManager = pushManager;
     this.requestPermission = requestPermission;
     // Opcional: lê o estado ATUAL da permissão (Notification.permission) sem precisar pedir de
@@ -24,6 +24,10 @@ export class PushService {
     // enxerga unsupported/subscribed/unsubscribed, como antes.
     this.getPermission = getPermission;
     this.repository = repository;
+    // Preferência de Squad por inscrição (push_subscription_squads) — opcional: sem repository
+    // (modo local/offline, ou navegador sem push) o picker de squads simplesmente não aparece,
+    // igual o resto do recurso de push já se comporta sem repository nenhum.
+    this.squadsRepository = squadsRepository;
     this.profileId = profileId;
     this.vapidPublicKey = vapidPublicKey;
     this.userAgent = userAgent;
@@ -84,5 +88,43 @@ export class PushService {
     const rows = await this.repository.list();
     const match = rows.find((row) => row.endpoint === endpoint);
     if (match) await this.repository.remove(match.id);
+  }
+
+  /** A linha de push_subscriptions do dispositivo ATUAL (pelo endpoint da inscrição do
+   * navegador) — base pra ler/gravar a preferência de Squad deste dispositivo específico. null
+   * quando não há inscrição ativa aqui (nada pra preferir ainda). */
+  async currentSubscriptionRow() {
+    if (!this.pushManager || !this.repository) return null;
+    const existing = await this.pushManager.getSubscription();
+    if (!existing) return null;
+    const rows = await this.repository.list();
+    return rows.find((row) => row.endpoint === existing.endpoint) ?? null;
+  }
+
+  /** true só quando o dispositivo atual tem inscrição ativa E a preferência de Squad está
+   * disponível (Supabase configurado) — controla se o botão de preferência aparece. */
+  get squadPreferenceAvailable() { return Boolean(this.squadsRepository); }
+
+  /** Squads escolhidos pra este dispositivo — array VAZIO significa "sem filtro, notifica de
+   * tudo" (o padrão, preservando o comportamento de hoje pra quem nunca configurou nada). */
+  async getSquadPreference() {
+    if (!this.squadsRepository) return [];
+    const subscription = await this.currentSubscriptionRow();
+    if (!subscription) return [];
+    const rows = await this.squadsRepository.list();
+    return rows.filter((row) => row.subscription_id === subscription.id).map((row) => row.squad_id);
+  }
+
+  /** Substitui a preferência inteira do dispositivo atual pelos squadIds informados (array vazio
+   * = voltar a notificar de tudo). Sempre um replace completo (remove tudo, grava de novo) — o
+   * volume é sempre pequeno (poucos Squads), não precisa de diff. */
+  async setSquadPreference(squadIds) {
+    if (!this.squadsRepository) throw new Error("Preferência de Squad não disponível neste modo.");
+    const subscription = await this.currentSubscriptionRow();
+    if (!subscription) throw new Error("Ative as notificações neste dispositivo antes de escolher os Squads.");
+    const rows = await this.squadsRepository.list();
+    const existing = rows.filter((row) => row.subscription_id === subscription.id);
+    for (const row of existing) await this.squadsRepository.remove(row.id);
+    for (const squadId of squadIds) await this.squadsRepository.upsert({ subscription_id: subscription.id, squad_id: squadId });
   }
 }

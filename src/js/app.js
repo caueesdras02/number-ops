@@ -91,7 +91,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
 // só depois de autenticado (a inscrição é vinculada ao profile). Se o navegador não suportar
 // (ou o registro falhar), PushService.available fica false e o botão continua escondido —
 // nunca quebra o resto do app.
-async function initPush(repository,profileId) {
+async function initPush(repository,profileId,{squadsRepository=null,squads=[]}={}) {
   let registration=null;
   try{ if("serviceWorker" in navigator) registration=await navigator.serviceWorker.register("./service-worker.js"); }
   catch{ registration=null; }
@@ -100,11 +100,12 @@ async function initPush(repository,profileId) {
     requestPermission:typeof Notification!=="undefined"?()=>Notification.requestPermission():null,
     getPermission:typeof Notification!=="undefined"?()=>Notification.permission:null,
     repository,
+    squadsRepository,
     profileId,
     vapidPublicKey:VAPID_PUBLIC_KEY,
     userAgent:navigator.userAgent,
   });
-  bindPushToggle(pushService);
+  bindPushToggle(pushService,{squads});
 }
 
 // "Números" reúne, como abas (dentro dos próprios controllers — ver
@@ -209,7 +210,7 @@ async function bootstrap() {
   logoutButton.before(profileLabel);
   authController.bindLogout(logoutButton);
   internalRoutesEnabled=true;
-  initPush(repositories.pushSubscriptions,authenticated.profile.id).catch(()=>{ /* notificação nunca pode travar o resto do app */ });
+  initPush(repositories.pushSubscriptions,authenticated.profile.id,{squadsRepository:repositories.pushSubscriptionSquads,squads:controllers.numbersService.state.groups.filter((group)=>group.isActive)}).catch(()=>{ /* notificação nunca pode travar o resto do app */ });
   showView(currentView());
   updateStickyHeader();
   bindThemeToggles();

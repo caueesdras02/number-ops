@@ -11,7 +11,8 @@ const m023 = await readFile(new URL("../supabase/023_external_number_campaign_li
 
 assert.match(m023, /create table public\.external_number_campaign_links/i);
 assert.match(m023, /external_number_id text not null references public\.external_numbers\(id\) on delete cascade/i);
-assert.match(m023, /campaign_id uuid not null references public\.campaigns\(id\) on delete cascade/i);
+// campaigns.id é text (ver schema.sql:92), nunca uuid — a FK precisa casar o tipo.
+assert.match(m023, /campaign_id text not null references public\.campaigns\(id\) on delete cascade/i);
 assert.match(m023, /phone_normalized text not null check \(phone_normalized ~ '\^55\[0-9\]\{10,11\}\$'\)/);
 assert.match(m023, /company_label text/i);
 assert.match(m023, /client_account_label text/i);

@@ -44,13 +44,18 @@ const deps = {
     if (error) throw error;
     if (!incident) return null;
 
-    const [{ data: number }, campaignAndClient] = await Promise.all([
+    const [{ data: number }, campaignAndClient, { data: numberSquads }] = await Promise.all([
       incident.number_id
         ? supabase.from("numbers").select("phone,identification").eq("id", incident.number_id).maybeSingle()
         : Promise.resolve({ data: null }),
       incident.campaign_id
         ? supabase.from("campaigns").select("name,client_id").eq("id", incident.campaign_id).maybeSingle()
         : Promise.resolve({ data: null }),
+      // Squad(s) do NÚMERO que caiu (não da campanha) — pra filtrar por preferência de Squad
+      // (migration 024). Um número pode estar em mais de um Squad; qualquer um deles é elegível.
+      incident.number_id
+        ? supabase.from("number_squads").select("squad_id").eq("number_id", incident.number_id)
+        : Promise.resolve({ data: [] }),
     ]);
 
     let clientName = null;
@@ -67,12 +72,21 @@ const deps = {
       numberIdentification: number?.identification ?? null,
       campaignName: campaignAndClient.data?.name ?? null,
       clientName,
+      numberSquadIds: (numberSquads ?? []).map((row) => row.squad_id),
     };
   },
   async listSubscriptions() {
-    const { data, error } = await supabase.from("push_subscriptions").select("id,endpoint,p256dh,auth_key");
+    const [{ data: subscriptions, error }, { data: preferences }] = await Promise.all([
+      supabase.from("push_subscriptions").select("id,endpoint,p256dh,auth_key"),
+      supabase.from("push_subscription_squads").select("subscription_id,squad_id"),
+    ]);
     if (error) throw error;
-    return (data ?? []).map((row) => ({ id: row.id, endpoint: row.endpoint, p256dh: row.p256dh, authKey: row.auth_key }));
+    const squadIdsBySubscription = new Map();
+    for (const row of preferences ?? []) {
+      if (!squadIdsBySubscription.has(row.subscription_id)) squadIdsBySubscription.set(row.subscription_id, []);
+      squadIdsBySubscription.get(row.subscription_id).push(row.squad_id);
+    }
+    return (subscriptions ?? []).map((row) => ({ id: row.id, endpoint: row.endpoint, p256dh: row.p256dh, authKey: row.auth_key, squadIds: squadIdsBySubscription.get(row.id) ?? [] }));
   },
   async sendPush(subscription, payload) {
     await webpush.sendNotification(

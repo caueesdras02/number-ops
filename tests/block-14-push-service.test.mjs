@@ -127,6 +127,53 @@ function makeService(overrides = {}) {
   await service.unsubscribe(); // no-op, não deve lançar
 }
 
+// 8) getSquadPreference/setSquadPreference: sem inscrição -> vazio; replace completo funciona;
+//    array vazio volta a "notifica de tudo" (nenhuma linha na preferência)
+{
+  const repository = makeRepo();
+  const squadsRepo = makeRepo();
+  const service = makeService({ repository, squadsRepository: squadsRepo });
+
+  assert.deepEqual(await service.getSquadPreference(), [], "sem inscrição ativa, preferência é vazia");
+  await assert.rejects(() => service.setSquadPreference(["squad1"]), /Ative as notificações/, "não dá pra gravar preferência sem inscrição");
+
+  await service.subscribe();
+  assert.deepEqual(await service.getSquadPreference(), [], "logo após assinar, sem preferência salva = notifica de tudo");
+
+  await service.setSquadPreference(["squad1", "squad2"]);
+  assert.deepEqual((await service.getSquadPreference()).sort(), ["squad1", "squad2"]);
+  assert.equal(squadsRepo.rows.length, 2);
+  const subscriptionId = repository.rows[0].id;
+  assert.ok(squadsRepo.rows.every((row) => row.subscription_id === subscriptionId));
+
+  // replace completo: nunca acumula lixo de uma escolha anterior
+  await service.setSquadPreference(["squad3"]);
+  assert.deepEqual(await service.getSquadPreference(), ["squad3"]);
+  assert.equal(squadsRepo.rows.length, 1);
+
+  // array vazio -> volta a notificar de tudo (remove a preferência, não deixa "squad vazio" salvo)
+  await service.setSquadPreference([]);
+  assert.deepEqual(await service.getSquadPreference(), []);
+  assert.equal(squadsRepo.rows.length, 0);
+}
+
+// 9) squadPreferenceAvailable / getSquadPreference sem squadsRepository (modo local/offline) — nunca quebra
+{
+  const service = makeService({ squadsRepository: null });
+  assert.equal(service.squadPreferenceAvailable, false);
+  assert.deepEqual(await service.getSquadPreference(), []);
+  await assert.rejects(() => service.setSquadPreference(["squad1"]), /não disponível/);
+}
+
+// 10) preferência é isolada por DISPOSITIVO (subscription_id) — nunca mistura com outra inscrição
+{
+  const repository = makeRepo([{ id: "sub-outro-aparelho", endpoint: "https://push.example/outro", profile_id: "profile-1" }]);
+  const squadsRepo = makeRepo([{ id: "pref-1", subscription_id: "sub-outro-aparelho", squad_id: "squad-de-outro-aparelho" }]);
+  const service = makeService({ repository, squadsRepository: squadsRepo });
+  await service.subscribe(); // endpoint diferente ("device-1"), vira uma nova linha
+  assert.deepEqual(await service.getSquadPreference(), [], "preferência de outro dispositivo não vaza pra este");
+}
+
 // 7) urlBase64ToUint8Array: round-trip contra um valor base64url conhecido
 {
   const bytes = Uint8Array.from([0, 1, 2, 3, 255, 254, 16, 32]);

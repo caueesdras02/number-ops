@@ -144,7 +144,7 @@ function makeService({ profile = { id: "profile-1", access_level: "USER" }, camp
   assert.match(html, /badge-external/);
   assert.match(html, /Não é nosso/);
   assert.match(html, /Zig Online/);
-  assert.match(html, /Conta: Dhenny novo/);
+  assert.match(html, /Conta do Cliente: Dhenny novo/);
   assert.match(html, /Nacarati/);
   assert.match(html, /data-action="end-external-link" data-id="link1"/, "vínculo ativo oferece Encerrar");
   assert.doesNotMatch(html, /data-action="end-external-link" data-id="link2"/, "vínculo já encerrado não oferece Encerrar de novo");

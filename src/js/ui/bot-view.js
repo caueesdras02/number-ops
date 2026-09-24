@@ -11,23 +11,20 @@ const statusBadge = (processingStatus) => `<span class="bot-status-badge ${statu
 // Empresa/Liveshop/Conta do Cliente vêm do próprio texto do alerta do Telegram (metadata do
 // integration_event) — existem mesmo quando o telefone não é nosso e não há Número/Campanha
 // cadastrados aqui. Mostrar como linha secundária evita "sumir" com uma informação que o alerta
-// já trouxe, mesmo sem vínculo formal ainda.
+// já trouxe, mesmo sem vínculo formal ainda. A coluna Status já distingue "Sem número associado"
+// de "Não pertence à operação" (ver PROCESSING_STATUS_LABELS) — esta coluna não repete essa
+// distinção com textos diferentes, só avisa que não há Número aqui e, quando existir, mostra a
+// conta do cliente que veio no alerta.
 const numberCell = (event) => {
   if (event.number) return `<button class="link-button" type="button" data-action="open-number" data-id="${event.number.id}">${formatPhone(event.number.phone)}</button>`;
   const contaCliente = event.metadata?.contaCliente;
-  if (event.processingStatus === "IGNORED_NOT_OWNED") {
-    return `<span class="bot-muted">Não é nosso</span>${contaCliente ? `<span class="table-secondary">Conta: ${escapeHtml(contaCliente)}</span>` : ""}`;
-  }
-  if (event.processingStatus === "PENDING_ASSOCIATION") {
-    return `<span class="bot-muted">Não encontrado</span>${contaCliente ? `<span class="table-secondary">Conta: ${escapeHtml(contaCliente)}</span>` : ""}`;
-  }
-  return `<span class="bot-muted">—</span>`;
+  return `<span class="bot-muted">Não encontrado${contaCliente ? ` — Conta do Cliente: ${escapeHtml(contaCliente)}` : ""}</span>`;
 };
 
 const campaignCell = (event) => {
   if (event.campaign) return `<button class="link-button" type="button" data-action="open-campaign" data-id="${event.campaign.id}">${escapeHtml(event.campaign.name)}</button>`;
   const liveshop = event.metadata?.liveshop;
-  return `<span class="bot-muted">—</span>${liveshop ? `<span class="table-secondary">Liveshop: ${escapeHtml(liveshop)}</span>` : ""}`;
+  return `<span class="bot-muted">—</span>${liveshop ? `<span class="table-secondary">${escapeHtml(liveshop)}</span>` : ""}`;
 };
 
 const incidentCell = (event) => event.incident
@@ -165,6 +162,7 @@ function notOwnedLinkActions(event, { canModify, availableCampaigns }) {
         <div class="form-actions"><button class="button button-primary" type="submit">Vincular</button></div>
       </form>
     </details>
+    <button class="button button-quiet" type="button" data-action="bot-create-campaign" data-id="${event.id}">Campanha ainda não existe? Criar nova</button>
   </div>`;
 }
 
