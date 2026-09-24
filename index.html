@@ -6,15 +6,21 @@
     <meta name="description" content="Number Ops — controle operacional de números da Live Shop Turbo." />
     <meta name="color-scheme" content="light dark" />
     <title>Number Ops</title>
+    <meta name="theme-color" id="meta-theme-color" content="#f4f7f5" />
     <script>
-      // Anti-flash: aplica o tema salvo antes do CSS pintar. Padrão: claro.
-      try { var t = localStorage.getItem("numberOpsTheme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (e) {}
+      // Anti-flash: aplica o tema salvo antes do CSS pintar (padrão: claro) e já ajusta a cor da
+      // barra do navegador/PWA junto, pra não nascer com a cor do tema errado por um instante.
+      try {
+        var t = localStorage.getItem("numberOpsTheme");
+        var dark = t === "dark" || (t !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+        if (dark) document.getElementById("meta-theme-color").setAttribute("content", "#0b1512");
+      } catch (e) {}
     </script>
     <link rel="icon" type="image/png" href="./src/assets/fivecon-no.png" />
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" sizes="180x180" href="./src/assets/icons/apple-touch-icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#0b1f18" />
     <link rel="stylesheet" href="./src/css/main.css" />
   </head>
   <body>

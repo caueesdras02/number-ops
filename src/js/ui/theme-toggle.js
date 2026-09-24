@@ -11,11 +11,16 @@ export function currentTheme() {
     || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 }
 
+// Mesmas cores de --color-canvas em tokens.css (claro/escuro) — o PWA instalado e a barra do
+// navegador mobile usam este valor, não o CSS, então precisam ser sincronizados manualmente.
+const THEME_COLORS = { light: "#f4f7f5", dark: "#0b1512" };
+
 export function applyTheme(theme) {
   const next = THEMES.includes(theme) ? theme : "light";
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem(STORAGE_KEY, next); } catch { /* armazenamento indisponível */ }
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => syncButton(button, next));
+  document.getElementById("meta-theme-color")?.setAttribute("content", THEME_COLORS[next]);
   return next;
 }
 
