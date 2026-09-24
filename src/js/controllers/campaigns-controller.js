@@ -60,11 +60,22 @@ export class CampaignsController {
     this.content.querySelector('[data-action="situacao-filter"]')?.addEventListener("change",(event)=>{this.applySituacaoFilter(event.target.value);this.render();});
     this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;})); // linhas do relatório de vínculos faltando (gap-report), não muda com a busca
     this.bindListActions();
-    // Veio da Central Number Ops Bot ("Campanha ainda não existe? Criar nova") — abre o form de
-    // Nova Campanha já pré-preenchido. take() consome e limpa: só abre nesta primeira renderização
-    // depois do clique, nunca de novo num render() seguinte não relacionado.
+    // Veio da Central Number Ops Bot ("Campanha ainda não existe? Criar nova"). take() consome e
+    // limpa: só age nesta primeira renderização depois do clique, nunca de novo num render()
+    // seguinte não relacionado. Antes de abrir o form de criação, verifica se já existe uma
+    // campanha ATIVA com nome parecido (mesma comparação — acento/maiúscula/espaço insensível —
+    // já usada pra pré-filtrar o seletor de "Vincular à campanha") — se existir, nunca abre
+    // "Nova campanha": leva direto pro detalhe da campanha já existente, evitando duplicidade.
     const prefill=takePendingCampaignPrefill();
-    if(prefill)this.openForm(null,{prefill});
+    if(prefill){
+      const similar=prefill.name?state.campaigns.find((campaign)=>campaign.status==="ACTIVE"&&matchesSearch(campaign.name,prefill.name)):null;
+      if(similar){
+        showToast(`Já existe uma campanha parecida: "${similar.name}". Vá no evento na Central Number Ops Bot e use "Vincular à campanha" pra associar este número a ela.`,"info",7000);
+        this.detail(similar.id);
+      }else{
+        this.openForm(null,{prefill});
+      }
+    }
   }
   /** Delegado no <tbody> (um listener só, não um por botão/linha): continua funcionando depois
    * que renderResults() troca o innerHTML das linhas a cada busca, sem precisar religar nada.

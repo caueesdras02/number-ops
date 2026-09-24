@@ -21,6 +21,21 @@
 .push-info:hover { color: var(--color-primary-deep); background: var(--color-surface-muted); }
 @media (max-width: 700px) { .push-info { width: 22px; height: 22px; font-size: .8rem; } }
 
+/* Divisor sutil entre o grupo de ícones de ação (busca/notificação/tema) e o grupo de
+   identidade (ambiente/perfil/Sair) — mesmos elementos de sempre, só deixa a organização do
+   topbar mais clara em vez de tudo numa fileira só. */
+.topbar-actions [data-env-divider] { margin-left: 6px; padding-left: 16px; border-left: 1px solid var(--color-border); }
+
+/* No mobile a barra fica estreita e os 4-5 botões de ícone (busca/sino/squads/tema) ficavam
+   grandes/apertados demais — reduz o tamanho e o espaçamento entre eles, mesma proporção já
+   usada pro ícone informativo (.push-info) ao lado. */
+@media (max-width: 700px) {
+  .topbar-actions { gap: 6px; }
+  .theme-toggle { width: 32px; height: 32px; font-size: .92rem; }
+  .push-info { margin-left: -4px; }
+  /* [data-env-divider] já some no mobile via a regra existente de .environment-label — nada a ajustar aqui. */
+}
+
 /* Logo Live Shop Turbo tem texto claro — em superfície clara vai sobre um fundo escuro. */
 .auth-mobile-brand img { padding: 12px 16px; border-radius: 14px; background: var(--color-sidebar); }
 :root[data-theme="dark"] .auth-mobile-brand img { background: transparent; padding: 0; }

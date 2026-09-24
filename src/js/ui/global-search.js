@@ -99,7 +99,7 @@ export function openGlobalSearch(getState) {
     <div class="global-search-input-row">
       <span aria-hidden="true">⌕</span>
       <input type="text" class="global-search-input" placeholder="Buscar número, cliente, campanha, squad..." autocomplete="off" spellcheck="false">
-      <kbd>Esc</kbd>
+      <button type="button" class="icon-button global-search-close" data-action="close-global-search" aria-label="Fechar busca">×</button>
     </div>
     <div class="global-search-results" role="listbox"></div>
   </section>`;
@@ -167,11 +167,15 @@ export function openGlobalSearch(getState) {
     if (entry) commit(entry);
   };
   const onBackdropClick = (event) => { if (event.target === backdrop) closeActive(); };
+  // Botão "×" sempre visível e tocável — o atalho Esc (onKeydown acima) continua funcionando no
+  // desktop, mas no celular não existe tecla Esc, então precisa de um jeito de fechar por toque.
+  const onCloseClick = () => closeActive();
 
   input.addEventListener("input", onInput);
   input.addEventListener("keydown", onKeydown);
   resultsEl.addEventListener("click", onResultsClick);
   backdrop.addEventListener("click", onBackdropClick);
+  backdrop.querySelector('[data-action="close-global-search"]').addEventListener("click", onCloseClick);
 
   paint();
   input.focus();

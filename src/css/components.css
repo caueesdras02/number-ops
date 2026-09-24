@@ -212,7 +212,10 @@ tr.is-pending-row{background:rgb(227 164 39/.06)}
 @media(max-width:400px){.guide-situations{grid-template-columns:1fr}.backup-preview ul,.backup-migration ul{grid-template-columns:1fr}.guide-nav-polished{gap:5px}.guide-nav-polished button{padding:7px 8px}}
 
 /* Final V1 operational conditions */
-.badge-external{display:inline-flex;align-items:center;margin-left:8px;padding:3px 7px;border-radius:999px;color:#97500c;background:#fff1df;font-size:.67rem;font-weight:800;white-space:nowrap;vertical-align:middle}
+/* display:block (não inline) pra sempre ficar numa linha própria embaixo do telefone, de forma
+   consistente — inline dependia da largura disponível, então nomes de empresa mais longos
+   quebravam de um jeito ou de outro conforme o conteúdo, parecendo desalinhado. */
+.badge-external{display:block;width:fit-content;margin-top:4px;padding:3px 7px;border-radius:999px;color:#97500c;background:#fff1df;font-size:.67rem;font-weight:800;white-space:nowrap}
 .restriction-badge{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;color:#97500c;background:#fff1df;font-size:.69rem;font-weight:800;white-space:nowrap}.detail-restriction{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 17px;border:1px solid #f0d6b7;border-radius:var(--radius-lg);background:#fff9f0;box-shadow:var(--shadow-xs)}.detail-restriction>div{display:flex;align-items:start;gap:10px}.detail-restriction>div>span{display:inline-flex;align-items:center;justify-content:center;width:29px;height:29px;flex:0 0 29px;border-radius:9px;color:#97500c;background:#ffedcf;font-weight:900}.detail-restriction strong{display:block;margin-top:2px;color:#61350e;font-size:.84rem}.detail-restriction p:not(.dash-kicker){margin-top:2px;color:#8e622e;font-size:.74rem}.detail-restriction.is-empty{border-color:var(--color-border);background:var(--color-surface)}.detail-restriction.is-empty>div>span{color:var(--color-primary-deep);background:var(--color-primary-soft)}.detail-restriction.is-empty strong{color:var(--color-text)}.detail-restriction.is-empty p:not(.dash-kicker){color:var(--color-muted)}.restriction-form{display:grid;gap:13px}.restriction-form>label{display:grid;gap:6px;color:var(--color-text);font-size:.82rem;font-weight:750}
 @media(max-width:700px){.detail-restriction{align-items:stretch;flex-direction:column;padding:14px}.detail-restriction .button{width:100%;justify-content:center}.record-actions .restriction-badge{display:none}}
 
@@ -295,7 +298,7 @@ button.stage-trigger:focus-visible{outline:2px solid var(--color-focus-ring);out
 .global-search-input-row { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--color-border); color: var(--color-muted); font-size: 1.05rem; }
 .global-search-input { flex: 1; border: 0; color: var(--color-text); background: transparent; font: inherit; font-size: .95rem; }
 .global-search-input:focus { outline: 0; }
-.global-search-input-row kbd { padding: 2px 7px; border: 1px solid var(--color-border-strong); border-radius: 6px; color: var(--color-muted); background: var(--color-surface-muted); font-family: inherit; font-size: .7rem; font-weight: 700; }
+.global-search-close { flex: 0 0 auto; width: 30px; height: 30px; font-size: 1.15rem; }
 .global-search-results { overflow-y: auto; padding: 8px; }
 .global-search-group + .global-search-group { margin-top: 4px; }
 .global-search-group-label { padding: 8px 10px 4px; color: var(--color-muted); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
