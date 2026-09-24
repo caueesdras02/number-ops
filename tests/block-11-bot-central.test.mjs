@@ -125,4 +125,27 @@ const fakeNumbersService = (state) => ({ state });
   assert.match(html, /data-action="open-number"/, "com número resolvido, oferece navegação para ele");
 }
 
+// 8) Empresa/Liveshop/Conta do Cliente do alerta Telegram aparecem mesmo sem número/campanha
+//    cadastrados aqui (evento IGNORED_NOT_OWNED ou PENDING_ASSOCIATION) — esse dado já vem no
+//    texto do alerta e não pode "sumir" só porque não houve vínculo formal ainda.
+{
+  const notOwnedEvent = {
+    id: "e1", eventType: "CONNECTIVITY_ALERT", processingStatus: "IGNORED_NOT_OWNED", phoneNormalized: "5581914101890",
+    number: null, campaign: null, incident: null, linkedIncidentId: null, campaignId: null, numberId: null, externalRecord: null,
+    metadata: { empresa: "Zig Online", liveshop: "Mega Feirão de fábrica", contaCliente: "Dhenny novo" },
+    receivedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const tableHtml = renderBotCentral({ available: true, events: [notOwnedEvent], metrics: { total: 1, matched: 0, pending: 0, openConnectivity: 0, lastEvent: notOwnedEvent }, filters: {} });
+  assert.match(tableHtml, /Conta: Dhenny novo/, "conta do cliente aparece na coluna Número mesmo sem número cadastrado");
+  assert.match(tableHtml, /Liveshop: Mega Feirão de fábrica/, "liveshop aparece na coluna Campanha mesmo sem campanha cadastrada");
+
+  const detailHtml = renderBotEventDetail(notOwnedEvent, { canModify: true, availableNumbers: [] });
+  assert.match(detailHtml, /Zig Online/, "empresa aparece no detalhe do evento");
+  assert.match(detailHtml, /Mega Feirão de fábrica/);
+  assert.match(detailHtml, /Dhenny novo/);
+
+  const withoutMetadata = { ...notOwnedEvent, id: "e2", metadata: {} };
+  assert.doesNotMatch(renderBotEventDetail(withoutMetadata), /bot-alertinfo-list/, "sem dado do alerta, não renderiza o bloco à toa");
+}
+
 console.log("Central Number Ops Bot (leitura, dashboard, badge de origem): todos os cenários passaram.");

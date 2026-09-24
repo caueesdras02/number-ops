@@ -8,13 +8,27 @@ export const phoneLabel = (digits) => (digits && (digits.length === 12 || digits
 const statusClass = { RECEIVED: "is-pending", MATCHED: "is-ok", LINKED_TO_INCIDENT: "is-ok", PENDING_ASSOCIATION: "is-warning", IGNORED: "is-muted", IGNORED_NOT_OWNED: "is-muted", ERROR: "is-error" };
 const statusBadge = (processingStatus) => `<span class="bot-status-badge ${statusClass[processingStatus] ?? "is-muted"}">${escapeHtml(PROCESSING_STATUS_LABELS[processingStatus] ?? processingStatus)}</span>`;
 
-const numberCell = (event) => event.number
-  ? `<button class="link-button" type="button" data-action="open-number" data-id="${event.number.id}">${formatPhone(event.number.phone)}</button>`
-  : (event.processingStatus === "PENDING_ASSOCIATION" ? `<span class="bot-muted">Não encontrado</span>` : `<span class="bot-muted">—</span>`);
+// Empresa/Liveshop/Conta do Cliente vêm do próprio texto do alerta do Telegram (metadata do
+// integration_event) — existem mesmo quando o telefone não é nosso e não há Número/Campanha
+// cadastrados aqui. Mostrar como linha secundária evita "sumir" com uma informação que o alerta
+// já trouxe, mesmo sem vínculo formal ainda.
+const numberCell = (event) => {
+  if (event.number) return `<button class="link-button" type="button" data-action="open-number" data-id="${event.number.id}">${formatPhone(event.number.phone)}</button>`;
+  const contaCliente = event.metadata?.contaCliente;
+  if (event.processingStatus === "IGNORED_NOT_OWNED") {
+    return `<span class="bot-muted">Não é nosso</span>${contaCliente ? `<span class="table-secondary">Conta: ${escapeHtml(contaCliente)}</span>` : ""}`;
+  }
+  if (event.processingStatus === "PENDING_ASSOCIATION") {
+    return `<span class="bot-muted">Não encontrado</span>${contaCliente ? `<span class="table-secondary">Conta: ${escapeHtml(contaCliente)}</span>` : ""}`;
+  }
+  return `<span class="bot-muted">—</span>`;
+};
 
-const campaignCell = (event) => event.campaign
-  ? `<button class="link-button" type="button" data-action="open-campaign" data-id="${event.campaign.id}">${escapeHtml(event.campaign.name)}</button>`
-  : `<span class="bot-muted">—</span>`;
+const campaignCell = (event) => {
+  if (event.campaign) return `<button class="link-button" type="button" data-action="open-campaign" data-id="${event.campaign.id}">${escapeHtml(event.campaign.name)}</button>`;
+  const liveshop = event.metadata?.liveshop;
+  return `<span class="bot-muted">—</span>${liveshop ? `<span class="table-secondary">Liveshop: ${escapeHtml(liveshop)}</span>` : ""}`;
+};
 
 const incidentCell = (event) => event.incident
   ? `<button class="link-button" type="button" data-action="open-incident" data-id="${event.incident.id}">${event.incident.status === "OPEN" ? "Aberta" : "Resolvida"}</button>`
@@ -94,6 +108,13 @@ function timelineStep({ done, icon, title, description }) {
   return `<li class="${done ? "is-done" : "is-pending"}"><span class="detail-event-icon">${done ? "✓" : icon}</span><div><strong>${title}</strong><p>${description}</p></div></li>`;
 }
 
+function alertInfoBlock(event) {
+  const { empresa, liveshop, contaCliente } = event.metadata ?? {};
+  if (!empresa && !liveshop && !contaCliente) return "";
+  const row = (label, value) => value ? `<li><strong>${escapeHtml(value)}</strong><span>${label}</span></li>` : "";
+  return `<div class="bot-detail-note bot-alertinfo-note"><p class="table-secondary">Dados informados no alerta do Telegram (ainda não vinculados a um registro cadastrado):</p><ul class="bot-alertinfo-list">${row("Empresa", empresa)}${row("Liveshop / Campanha", liveshop)}${row("Conta do Cliente", contaCliente)}</ul></div>`;
+}
+
 function notOwnedNote(event) {
   if (event.processingStatus !== "IGNORED_NOT_OWNED") return "";
   const info = event.metadata?.notOwned;
@@ -150,5 +171,5 @@ export function renderBotEventDetail(event, { canModify = false, availableNumber
   if (event.campaignId) links.push(`<button class="button button-quiet" type="button" data-action="open-campaign" data-id="${event.campaignId}">Ver campanha</button>`);
   if (event.linkedIncidentId) links.push(`<button class="button button-quiet" type="button" data-action="open-incident" data-id="${event.linkedIncidentId}">Ver ocorrência</button>`);
 
-  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${notOwnedNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${revertAction(event, { canModify })}</article></div>`;
+  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${alertInfoBlock(event)}${notOwnedNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${revertAction(event, { canModify })}</article></div>`;
 }
