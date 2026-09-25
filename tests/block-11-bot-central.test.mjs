@@ -152,6 +152,14 @@ const fakeNumbersService = (state) => ({ state });
   assert.match(detailHtml, /Mega Feirão de fábrica/);
   assert.match(detailHtml, /Dhenny novo/);
 
+  // Já vinculado (existingExternalLinks) — coluna Campanha na TABELA vira link de verdade pra
+  // campanha (mesmo estilo de uma campanha nossa já associada), não mais o texto cru do alerta.
+  // Antes disso a tabela nunca dava nenhum sinal visual de que o vínculo já tinha sido feito.
+  const linkedEvent = { ...notOwnedEvent, id: "e3", existingExternalLinks: [{ campaignId: "camp1", campaignName: "Mega Feirão de fábrica", clientName: "Zig Online" }] };
+  const linkedHtml = renderBotCentral({ available: true, events: [linkedEvent], metrics: { total: 1, matched: 0, pending: 0, openConnectivity: 0, lastEvent: linkedEvent }, filters: {} });
+  assert.match(linkedHtml, /data-action="open-campaign" data-id="camp1">Mega Feirão de fábrica</, "vinculado: campanha aparece como link clicável, não como texto cru sem vínculo");
+  assert.doesNotMatch(linkedHtml, /<span class="table-secondary">Mega Feirão de fábrica<\/span>/, "não mostra mais o texto cru do alerta depois de vinculado");
+
   const withoutMetadata = { ...notOwnedEvent, id: "e2", metadata: {} };
   assert.doesNotMatch(renderBotEventDetail(withoutMetadata), /bot-alertinfo-list/, "sem dado do alerta, não renderiza o bloco à toa");
 }

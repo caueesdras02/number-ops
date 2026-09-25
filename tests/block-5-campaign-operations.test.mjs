@@ -323,4 +323,35 @@ assert.equal(gapCampaigns.linksFor("gn1").length, linksBefore + 1, "função alt
 assert.ok(gapCampaigns.linksFor("gn1").some((l) => l.role === "BACKUP" && l.endedAt), "vínculo anterior (BACKUP) permanece no histórico");
 assert.equal(gapCampaigns.state.campaigns.filter((c) => c.id === campaignForGc1.id).length, 1, "não duplica a campanha");
 
-console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, alterar função num clique, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
+// ---------------------------------------------------------------------------
+// ORDENAÇÃO: campanhas Encerradas sempre por último na listagem geral (mesmo
+// sem filtro de Situação aplicado) — nunca misturadas entre as ativas.
+// ---------------------------------------------------------------------------
+{
+  const orderState = {
+    schemaVersion: 2, meta: { seedApplied: true },
+    groups: [{ id: "os1", name: "Squad Order", isActive: true }],
+    clients: [{ id: "oc1", name: "Cliente Order", squadId: "os1", isActive: true }],
+    responsibles: [{ id: "or1", name: "Resp Order", isActive: true }],
+    campaigns: [], numbers: [], numberCampaignLinks: [], incidents: [], historyEvents: [], locations: [],
+  };
+  let orderPersisted = structuredClone(orderState);
+  const orderNumbers = new NumbersService({ initialize: () => structuredClone(orderPersisted), save: (v) => { orderPersisted = structuredClone(v); } });
+  const orderCampaigns = new CampaignsService(orderNumbers);
+  const camp1 = orderCampaigns.create({ name: "Primeira", clientId: "oc1", squadId: "os1", responsibleId: "or1" });
+  const camp2 = orderCampaigns.create({ name: "Segunda", clientId: "oc1", squadId: "os1", responsibleId: "or1" });
+  const camp3 = orderCampaigns.create({ name: "Terceira", clientId: "oc1", squadId: "os1", responsibleId: "or1" });
+  orderCampaigns.close(camp1.id); // encerra a PRIMEIRA criada — se a ordenação fosse só por criação, continuaria na frente
+  const ordered = orderCampaigns.list({});
+  assert.deepEqual(ordered.map((c) => c.id), [camp2.id, camp3.id, camp1.id], "encerrada some pro final mesmo tendo sido criada primeiro; ativas mantêm a ordem relativa entre si");
+
+  orderCampaigns.close(camp3.id);
+  const orderedTwoClosed = orderCampaigns.list({});
+  assert.deepEqual(orderedTwoClosed.map((c) => c.id), [camp2.id, camp1.id, camp3.id], "com mais de uma encerrada, a ordem relativa ENTRE as encerradas também é preservada (a que fechou primeiro continua na frente das outras encerradas)");
+
+  // filtrando só por Encerradas, a ordenação não muda nada de errado (grupo único, ordem relativa preservada)
+  const onlyClosed = orderCampaigns.list({ status: "CLOSED" });
+  assert.deepEqual(onlyClosed.map((c) => c.id), [camp1.id, camp3.id]);
+}
+
+console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, alterar função num clique, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico, ordenação (encerradas por último) e proteção contra duplo submit validados.");

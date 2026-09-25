@@ -22,6 +22,7 @@
 import { canOperate } from "../models/access.js";
 import { canonicalBrazilianPhone } from "../models/phone.js";
 import { createId, now } from "../models/helpers.js";
+import { normalizeSearchText } from "../models/search-match.js";
 
 export const PROCESSING_STATUS_LABELS = Object.freeze({
   RECEIVED: "Recebido",
@@ -136,7 +137,30 @@ export class BotService {
             return { ...link, campaignName: linkCampaign?.name ?? null, clientName: linkClient?.name ?? null };
           })
       : [];
-    return { ...event, number, campaign, client, incident, externalRecord, existingExternalLinks };
+    // Só pra número que não é nosso (IGNORED_NOT_OWNED) — nunca mexe na classificação automática
+    // de números já nossos. Ver findPossibleOldCampaign.
+    const possibleOldCampaign = event.processingStatus === "IGNORED_NOT_OWNED" ? this.findPossibleOldCampaign(event) : null;
+    return { ...event, number, campaign, client, incident, externalRecord, existingExternalLinks, possibleOldCampaign };
+  }
+
+  /**
+   * Sinal de que a operação pode ter migrado pra uma campanha nova sem encerrar a antiga: a
+   * Empresa do alerta bate (nome exato, sem acento/maiúscula) com um Cliente já cadastrado, e
+   * esse Cliente já tem uma Campanha ATIVA com nome DIFERENTE do Liveshop deste alerta. Puramente
+   * um diagnóstico de LEITURA — quem decide encerrar a campanha antiga é sempre a pessoa (ver
+   * data-action="bot-close-old-campaign" em bot-controller.js, que reaproveita
+   * CampaignsService.close(), o mesmo fluxo oficial usado em Campanhas).
+   */
+  findPossibleOldCampaign(event) {
+    const empresa = event.metadata?.empresa;
+    const liveshop = event.metadata?.liveshop;
+    if (!empresa || !liveshop) return null;
+    const state = this.numbers.state;
+    const client = state.clients.find((item) => item.isActive && normalizeSearchText(item.name) === normalizeSearchText(empresa));
+    if (!client) return null;
+    const oldCampaign = state.campaigns.find((campaign) => campaign.status === "ACTIVE" && campaign.clientId === client.id && normalizeSearchText(campaign.name) !== normalizeSearchText(liveshop));
+    if (!oldCampaign) return null;
+    return { campaignId: oldCampaign.id, campaignName: oldCampaign.name, clientId: client.id, clientName: client.name };
   }
 
   emptyMetrics() { return { total: 0, matched: 0, pending: 0, notOwned: 0, openConnectivity: this.openConnectivityCount() }; }

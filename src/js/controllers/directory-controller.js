@@ -18,7 +18,10 @@ export class DirectoryController {
     const tabs = this.type === "locations" ? renderPageTabs(NUMBERS_SECTION_TABS, "locations") : "";
     this.content.innerHTML = tabs + renderDirectory(this.type, this.service.list(this.type, true), this.query, this.state.groups, this.state.responsibles);
     if (this.type === "locations") bindPageTabs(this.content, NUMBERS_SECTION_TABS);
-    this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
+    // querySelectorAll (não querySelector): existem DOIS botões "Adicionar" possíveis ao mesmo
+    // tempo — o do cabeçalho e o do card de "Nenhum registro encontrado" (lista vazia sem busca).
+    // Com querySelector só o primeiro (cabeçalho) recebia o clique.
+    this.content.querySelectorAll('[data-action="add"]').forEach((button) => button.addEventListener("click", () => this.openForm()));
     this.content.querySelector('[data-action="bulk-squad"]')?.addEventListener("click", () => this.openBulkSquad());
     // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
     // o foco a cada letra) — só a lista é atualizada, ver renderResults().

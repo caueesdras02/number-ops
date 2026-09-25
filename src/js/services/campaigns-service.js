@@ -24,7 +24,10 @@ export function effectiveCampaignStage(campaign) {
 
 export class CampaignsService {
   constructor(numbersService) { this.numbers = numbersService; this.state = numbersService.state; this.state.campaigns ??= []; this.state.numberCampaignLinks ??= []; }
-  list(filters = {}) { return this.state.campaigns.filter((item) => matchesSearch(item.name, filters.query) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
+  // Encerradas sempre por último (Array.prototype.sort é estável desde sempre no Node/browsers
+  // atuais — a ordem relativa dentro de cada grupo, ativas entre si e encerradas entre si,
+  // continua exatamente a mesma de antes; só o grupo "Encerrada" inteiro desce pro final).
+  list(filters = {}) { return this.state.campaigns.filter((item) => matchesSearch(item.name, filters.query) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)).sort((a, b) => (a.status === CAMPAIGN_STATUSES.CLOSED ? 1 : 0) - (b.status === CAMPAIGN_STATUSES.CLOSED ? 1 : 0)); }
   get(id) { return this.state.campaigns.find((item) => item.id === id) ?? null; }
   create(input) { this.validate(input); const item = createCampaign({ ...input, status: CAMPAIGN_STATUSES.ACTIVE }); this.state.campaigns.push(item); this.persist(); return item; }
   update(id, input) { const existing = this.get(id); if (!existing) throw new Error("Campanha não encontrada."); this.validate(input); const item = { ...existing, name: String(input.name).trim(), clientId: input.clientId || null, squadId: input.squadId || null, responsibleId: input.responsibleId || null, notes: String(input.notes ?? "").trim(), updatedAt: now() }; Object.assign(existing, item); this.persist(); return existing; }

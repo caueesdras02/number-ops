@@ -83,7 +83,7 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     backup:new BackupController({service:new BackupService(numbersService),content}),
     // Central Number Ops Bot — leitura. Sem repository (modo local/offline) ela
     // mesma mostra um estado "indisponível", sem quebrar a rota.
-    bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,externalNumberCampaignLinksRepository,numbersService,currentProfile}),content}),
+    bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,externalNumberCampaignLinksRepository,numbersService,currentProfile}),campaignsService,content}),
   };
 }
 

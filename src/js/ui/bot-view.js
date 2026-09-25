@@ -21,8 +21,17 @@ const numberCell = (event) => {
   return `<span class="bot-muted">Não encontrado${contaCliente ? ` — Conta do Cliente: ${escapeHtml(contaCliente)}` : ""}</span>`;
 };
 
+// Número externo (não é nosso) já vinculado manualmente a uma ou mais campanhas (ver
+// BotService.linkToCampaign/existingExternalLinks) — mostra como link de verdade, igual uma
+// campanha nossa já associada, em vez do texto cru do alerta sem vínculo. Sem isso, a tabela nunca
+// dava nenhum sinal visual de que o vínculo já tinha sido feito — só aparecia dentro do modal de
+// detalhe.
 const campaignCell = (event) => {
   if (event.campaign) return `<button class="link-button" type="button" data-action="open-campaign" data-id="${event.campaign.id}">${escapeHtml(event.campaign.name)}</button>`;
+  const existingLinks = event.existingExternalLinks ?? [];
+  if (existingLinks.length) {
+    return existingLinks.map((link) => `<button class="link-button" type="button" data-action="open-campaign" data-id="${link.campaignId}">${escapeHtml(link.campaignName ?? link.campaignId)}</button>`).join(", ");
+  }
   const liveshop = event.metadata?.liveshop;
   return `<span class="bot-muted">—</span>${liveshop ? `<span class="table-secondary">${escapeHtml(liveshop)}</span>` : ""}`;
 };
@@ -110,6 +119,16 @@ function alertInfoBlock(event) {
   if (!empresa && !liveshop && !contaCliente) return "";
   const row = (label, value) => value ? `<li><strong>${escapeHtml(value)}</strong><span>${label}</span></li>` : "";
   return `<div class="bot-detail-note bot-alertinfo-note"><p class="table-secondary">Dados informados no alerta do Telegram (ainda não vinculados a um registro cadastrado):</p><ul class="bot-alertinfo-list">${row("Empresa", empresa)}${row("Liveshop / Campanha", liveshop)}${row("Conta do Cliente", contaCliente)}</ul></div>`;
+}
+
+/** Aviso de possível campanha antiga esquecida ativa (ver BotService.findPossibleOldCampaign) —
+ * texto sempre visível (é um diagnóstico útil mesmo pra quem só lê), botão de encerrar só quando
+ * canModify (VIEWER nunca escreve). */
+function possibleOldCampaignBanner(event, { canModify }) {
+  const old = event.possibleOldCampaign;
+  if (!old) return "";
+  const liveshop = escapeHtml(event.metadata?.liveshop ?? "");
+  return `<div class="detail-attention"><span aria-hidden="true">!</span><div><strong>Campanha antiga ainda ativa?</strong><p>O cliente <strong>${escapeHtml(old.clientName)}</strong> já tem a campanha <strong>${escapeHtml(old.campaignName)}</strong> ativa no sistema — este alerta veio com um nome diferente (${liveshop}). Se "${escapeHtml(old.campaignName)}" já acabou, você pode encerrá-la agora.</p>${canModify ? `<div class="form-actions" style="margin-top:9px"><button class="button button-quiet" type="button" data-action="bot-close-old-campaign" data-campaign-id="${old.campaignId}">Encerrar "${escapeHtml(old.campaignName)}"</button></div>` : ""}</div></div>`;
 }
 
 function notOwnedNote(event) {
@@ -212,5 +231,5 @@ export function renderBotEventDetail(event, { canModify = false, availableNumber
   if (event.campaignId) links.push(`<button class="button button-quiet" type="button" data-action="open-campaign" data-id="${event.campaignId}">Ver campanha</button>`);
   if (event.linkedIncidentId) links.push(`<button class="button button-quiet" type="button" data-action="open-incident" data-id="${event.linkedIncidentId}">Ver ocorrência</button>`);
 
-  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${alertInfoBlock(event)}${notOwnedNote(event)}${existingExternalLinksNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${notOwnedLinkActions(event, { canModify, availableCampaigns })}${revertAction(event, { canModify })}</article></div>`;
+  return `<div class="modal-backdrop" data-bot-modal><article class="modal-card bot-detail-modal" role="dialog" aria-modal="true" aria-labelledby="bot-detail-title"><div class="modal-header"><div><p class="eyebrow">Evento Telegram</p><h2 id="bot-detail-title">${escapeHtml(EVENT_TYPE_LABELS[event.eventType] ?? event.eventType)}</h2><p>${phoneLabel(event.phoneNormalized)} · ${date(event.receivedAt)}</p></div><button class="icon-button" type="button" data-action="close-bot-detail" aria-label="Fechar">×</button></div><ol class="detail-timeline bot-timeline">${steps}</ol>${alertInfoBlock(event)}${possibleOldCampaignBanner(event, { canModify })}${notOwnedNote(event)}${existingExternalLinksNote(event)}${links.length ? `<div class="form-actions bot-detail-links">${links.join("")}</div>` : ""}${pendingActions(event, { canModify, availableNumbers })}${notOwnedLinkActions(event, { canModify, availableCampaigns })}${revertAction(event, { canModify })}</article></div>`;
 }

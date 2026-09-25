@@ -24,14 +24,18 @@ const trendPanel = (trend) => `<article class="dash-panel dash-trend"><div class
 
 export function renderDashboard(data) {
   const m = data.metrics;
+  // 5º item (filter) é o filtro que o card já deixa aplicado ao navegar (ver
+  // dashboard-controller.js + models/pending-list-filter.js) — null pra "Total" (mostra tudo,
+  // sem filtro, como já era). Chaves/valores batendo exatamente com os filtros que
+  // numbers-view.js/incidents-view.js já aceitam (data-filter="status"/"utilization").
   const kpis = [
-    ["total", "Total de números", m.total, "numbers"],
-    ["available", "Disponíveis", m.available, "numbers"],
-    ["inuse", "Em uso", m.inUse, "numbers"],
-    ["warming", "Em aquecimento", m.warming, "numbers"],
-    ["review", "Em análise", m.review, "numbers"],
-    ["blocked", "Bloqueados", m.blocked, "numbers"],
-    ["incidents", "Ocorrências abertas", m.open, "incidents"],
+    ["total", "Total de números", m.total, "numbers", null],
+    ["available", "Disponíveis", m.available, "numbers", { utilization: "AVAILABLE" }],
+    ["inuse", "Em uso", m.inUse, "numbers", { utilization: "IN_USE" }],
+    ["warming", "Em aquecimento", m.warming, "numbers", { status: "WARMING" }],
+    ["review", "Em análise", m.review, "numbers", { status: "UNDER_REVIEW" }],
+    ["blocked", "Bloqueados", m.blocked, "numbers", { status: "BLOCKED" }],
+    ["incidents", "Ocorrências abertas", m.open, "incidents", { status: "OPEN" }],
   ];
   const attention = [
     ["blocked", "Bloqueados", data.attention.blocked, "numbers"],
@@ -39,7 +43,7 @@ export function renderDashboard(data) {
     ["incidents", "Ocorrências abertas", data.attention.open, "incidents"],
   ];
   return `<section class="dashboard dashboard-polished"><div class="dashboard-intro"><div><p class="eyebrow">Visão operacional</p><h2>Saúde da operação</h2><p>Acompanhe disponibilidade, utilização, pontos de atenção e atividade recente a partir dos dados cadastrados.</p></div><span class="dash-live"><i></i> Dados compartilhados atualizados</span></div>
-  <div class="metric-grid metric-grid-polished">${kpis.map(([kind, label, value, target]) => `<button type="button" class="metric-card metric-${kind}" data-target="${target}"><span class="metric-icon" aria-hidden="true">${icons[kind]}</span><span class="metric-label">${escapeHtml(label)}</span><strong data-kpi-value="${value}">0</strong><span class="metric-link">Ver ${target === "numbers" ? "números" : "ocorrências"} <b>→</b></span></button>`).join("")}</div>
+  <div class="metric-grid metric-grid-polished">${kpis.map(([kind, label, value, target, filter]) => `<button type="button" class="metric-card metric-${kind}" data-target="${target}"${filter ? ` data-filter='${escapeHtml(JSON.stringify(filter))}'` : ""}><span class="metric-icon" aria-hidden="true">${icons[kind]}</span><span class="metric-label">${escapeHtml(label)}</span><strong data-kpi-value="${value}">0</strong><span class="metric-link">Ver ${target === "numbers" ? "números" : "ocorrências"} <b>→</b></span></button>`).join("")}</div>
   <div class="dashboard-primary-grid"><article class="dash-panel dash-status-panel"><div class="dash-panel-heading"><div><p class="dash-kicker">Panorama</p><h3>Distribuição por status</h3></div><span class="dash-panel-note">Números não arquivados</span></div><div class="dash-status-list">${statuses(data.status).map((item) => `<div class="dash-status-row dash-status-${item.key.toLowerCase()}"><div><span class="dash-status-icon">${icons[item.key]}</span><span>${labels[item.key]}</span></div><strong>${item.count}</strong><div class="dash-progress" aria-label="${labels[item.key]}: ${item.count}"><i style="--bar-value:${item.value}%"></i></div></div>`).join("")}</div></article>
   <article class="dash-panel dash-attention"><div class="dash-panel-heading"><div><p class="dash-kicker">Prioridade</p><h3>Atenção necessária</h3></div><span class="attention-count">${data.attention.blocked.length + data.attention.review.length + data.attention.open.length}</span></div><div class="attention-list">${attention.map(([kind, title, items, target]) => items.length ? `<section class="attention-group attention-${kind}"><div class="attention-group-heading"><span>${icons[kind]}</span><strong>${title}</strong><b>${items.length}</b>${kind === "incidents" && data.attention.botConnectivity.length ? `<button type="button" class="attention-bot-hint" data-target="bot" title="Ocorrências de conectividade abertas pela integração com o Telegram">◈ ${data.attention.botConnectivity.length} via Bot</button>` : ""}</div>${items.slice(0, 3).map((item) => `<button type="button" data-target="${target}" class="attention-item"><span>${escapeHtml(kind === "incidents" ? item.title : phone(data.numbers, item.id))}</span><small>${escapeHtml(kind === "incidents" ? phone(data.numbers, item.numberId) : labels[item.status])}</small><b>→</b></button>`).join("")}</section>` : "").join("") || empty("Operação sob controle", "Não há números bloqueados, em análise ou ocorrências abertas.")}</div></article></div>
   ${trendPanel(data.trend)}

@@ -7,7 +7,9 @@ import { matchesSearch } from "../models/search-match.js";
 import { setPendingCampaignPrefill } from "../models/pending-campaign-prefill.js";
 
 export class BotController {
-  constructor({ service, content }) { this.service = service; this.content = content; this.filters = {}; this.data = null; }
+  // campaignsService: só pra reaproveitar close() (mesmo fluxo oficial usado em Campanhas) na
+  // ação "Encerrar campanha antiga" — o resto deste controller continua sem depender dele.
+  constructor({ service, campaignsService = null, content }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.filters = {}; this.data = null; }
 
   async render() {
     try { this.data = await this.service.load(); this.paint(); }
@@ -146,6 +148,30 @@ export class BotController {
         contaCliente: event.metadata?.contaCliente || "",
       });
       window.location.hash = "#campaigns";
+    });
+
+    // "Campanha antiga ainda ativa?" (ver bot-view.js possibleOldCampaignBanner) — mesmo fluxo
+    // oficial de encerrar campanha já usado em Campanhas (CampaignsService.close()), só disparado
+    // a partir daqui pra não duplicar a lógica de encerrar/confirmar.
+    modal.querySelector('[data-action="bot-close-old-campaign"]')?.addEventListener("click", async (clickEvent) => {
+      if (!this.campaignsService) return;
+      const campaignId = clickEvent.currentTarget.dataset.campaignId;
+      const campaign = this.campaignsService.get(campaignId);
+      const confirmed = await confirmDialog(this.content, {
+        icon: "!",
+        title: "Encerrar esta campanha?",
+        bodyHtml: `<p>Os vínculos ativos com números serão encerrados e o histórico será preservado.</p>`,
+        confirmLabel: "Encerrar campanha",
+        tone: "danger",
+      });
+      if (!confirmed) return;
+      try {
+        this.campaignsService.close(campaignId);
+        await this.campaignsService.flush();
+        showToast(`Campanha "${campaign?.name ?? ""}" encerrada.`, "warning");
+        modal.remove();
+        await this.render();
+      } catch (error) { showToast(error.message, "error"); }
     });
   }
 }

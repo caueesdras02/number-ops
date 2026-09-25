@@ -3,13 +3,22 @@ import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { escapeHtml } from "../ui/number-presentation.js";
+import { takePendingListFilter } from "../models/pending-list-filter.js";
 
 export class IncidentsController {
   constructor({ service, numbers, content }) { this.service = service; this.numbers = numbers; this.content = content; this.filters = {}; }
 
   render() {
+    // Veio de um card do Dashboard já filtrado (ver models/pending-list-filter.js) — mesmo padrão
+    // usado em NumbersController.
+    const pendingFilter = takePendingListFilter("incidents");
+    if (pendingFilter) this.filters = { ...this.filters, ...pendingFilter };
     this.content.innerHTML = renderIncidents(this.service.list(this.filters), this.numbers.state.numbers, this.numbers.getResponsibles(), this.filters, this.numbers.state.campaigns, this.numbers.state.clients);
-    this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.form());
+    // querySelectorAll (não querySelector): existem DOIS botões "Nova ocorrência" possíveis ao
+    // mesmo tempo — o do cabeçalho e o do card de "Nenhuma ocorrência encontrada" (quando a lista
+    // filtrada vem vazia). Com querySelector só o primeiro (cabeçalho) recebia o clique; o do
+    // card vazio nunca abria o formulário.
+    this.content.querySelectorAll('[data-action="add"]').forEach((button) => button.addEventListener("click", () => this.form()));
     this.content.querySelectorAll('[data-filter]').forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
     this.content.querySelectorAll('[data-action="clear-filters"]').forEach((button) => button.addEventListener("click", () => { this.filters = {}; this.render(); }));
     this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.detail(button.dataset.id)));

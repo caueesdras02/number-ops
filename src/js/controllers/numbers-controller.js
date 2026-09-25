@@ -8,6 +8,7 @@ import { confirmDialog } from "../ui/confirm-dialog.js";
 import { formatPhone } from "../ui/number-presentation.js";
 import { matchesSearch } from "../models/search-match.js";
 import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
+import { takePendingListFilter } from "../models/pending-list-filter.js";
 
 export class NumbersController {
   constructor({ service, campaignsService, content }) {
@@ -21,6 +22,12 @@ export class NumbersController {
   }
 
   render() {
+    // Veio de um card do Dashboard já filtrado (ver models/pending-list-filter.js). take()
+    // consome e limpa: só aplica nesta primeira renderização depois do clique, nunca de novo
+    // num render() seguinte (digitar na busca, trocar outro filtro etc. chamam render() de novo
+    // sem nenhum pendente, então isso nunca sobrescreve o que a pessoa ajustou manualmente depois).
+    const pendingFilter = takePendingListFilter("numbers");
+    if (pendingFilter) { this.filters = { ...this.filters, ...pendingFilter }; this.filtersOpen = true; }
     this.content.innerHTML = renderPageTabs(NUMBERS_SECTION_TABS, "numbers") + renderNumbersView(this.service.getNumbers(this.query, { ...this.filters, archiveFilter: this.archiveFilter }), this.service.getLocations(), this.service.getResponsibles(), this.query, this.archiveFilter, this.filters, this.service.getClients(), this.service.getGroups(), this.filtersOpen, this.service.state.campaigns, this.service.state.numberCampaignLinks);
     bindPageTabs(this.content, NUMBERS_SECTION_TABS);
     this.bindPageEvents();
@@ -34,7 +41,10 @@ export class NumbersController {
       this.query = event.target.value;
       this.renderResults();
     });
-    this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
+    // querySelectorAll (não querySelector): existem DOIS botões "Adicionar número" possíveis ao
+    // mesmo tempo — o do cabeçalho e o do card de "Nenhum número encontrado" (lista vazia sem
+    // filtro). Com querySelector só o primeiro (cabeçalho) recebia o clique.
+    this.content.querySelectorAll('[data-action="add"]').forEach((button) => button.addEventListener("click", () => this.openForm()));
     this.bindListActions();
     this.content.querySelector("#archive-filter")?.addEventListener("change", (event) => { this.archiveFilter = event.target.value; this.render(); });
     this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { this.filters[input.dataset.filter] = input.value; this.render(); }));
