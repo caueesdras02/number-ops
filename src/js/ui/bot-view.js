@@ -44,7 +44,7 @@ function activityRow(event) {
     <td>${statusBadge(event.processingStatus)}</td>
     <td>${classificationCell(event)}</td>
     <td>${incidentCell(event)}</td>
-    <td class="table-actions"><button class="button button-quiet" type="button" data-action="bot-detail" data-id="${event.id}">Detalhes</button></td>
+    <td><div class="table-actions"><button class="button button-quiet" type="button" data-action="bot-detail" data-id="${event.id}">Detalhes</button></div></td>
   </tr>`;
 }
 
@@ -149,6 +149,12 @@ function campaignPickerRow(campaign) {
  * mesmo filtro data-link-search já usado no form de associar número). */
 function notOwnedLinkActions(event, { canModify, availableCampaigns }) {
   if (event.processingStatus !== "IGNORED_NOT_OWNED" || !canModify) return "";
+  // Já vinculado a pelo menos uma campanha (ver existingExternalLinksNote acima, que já diz a
+  // qual) — nem "Vincular à campanha" nem "Criar nova" fazem sentido mais; um botão desabilitado
+  // (não um link/ação de verdade) só confirma visualmente que já foi feito.
+  if (event.existingExternalLinks?.length) {
+    return `<div class="bot-detail-actions"><button type="button" class="button button-quiet" disabled>✓ Campanha já vinculada</button></div>`;
+  }
   const rows = availableCampaigns.map(campaignPickerRow).join("");
   const prefill = event.metadata?.liveshop || "";
   return `<div class="bot-detail-actions">

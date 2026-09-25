@@ -119,19 +119,30 @@ function makeService({ profile = { id: "profile-1", access_level: "USER" }, camp
   assert.equal(serviceEnded.enrich(makeEvent()).existingExternalLinks.length, 0, "vínculo encerrado não conta como 'já vinculado'");
 }
 
-// 7) renderBotEventDetail: nota de já-vinculado e form de vincular só aparecem quando IGNORED_NOT_OWNED + canModify
+// 7) renderBotEventDetail: nota de já-vinculado sempre aparece quando IGNORED_NOT_OWNED + canModify;
+//    form de vincular/criar campanha só aparece quando AINDA NÃO está vinculado a nenhuma —
+//    já vinculado mostra só uma confirmação não clicável (nem "Vincular" nem "Criar nova" fazem
+//    sentido mais nesse caso).
 {
-  const event = { ...makeEvent(), existingExternalLinks: [{ campaignId: "camp1", campaignName: "Mega Feirão de fábrica", clientName: "Zig Online" }] };
-  const html = renderBotEventDetail(event, { canModify: true, availableCampaigns: [{ id: "camp2", name: "Outra campanha", clientName: "Cliente Y" }] });
+  const notYetLinkedEvent = { ...makeEvent(), existingExternalLinks: [] };
+  const notYetLinkedHtml = renderBotEventDetail(notYetLinkedEvent, { canModify: true, availableCampaigns: [{ id: "camp2", name: "Outra campanha", clientName: "Cliente Y" }] });
+  assert.match(notYetLinkedHtml, /data-bot-link-campaign-form/);
+  assert.match(notYetLinkedHtml, /data-action="bot-create-campaign"/);
+  assert.match(notYetLinkedHtml, /Outra campanha/);
+  assert.doesNotMatch(notYetLinkedHtml, /Já vinculada/);
+
+  const alreadyLinkedEvent = { ...makeEvent(), existingExternalLinks: [{ campaignId: "camp1", campaignName: "Mega Feirão de fábrica", clientName: "Zig Online" }] };
+  const html = renderBotEventDetail(alreadyLinkedEvent, { canModify: true, availableCampaigns: [{ id: "camp2", name: "Outra campanha", clientName: "Cliente Y" }] });
   assert.match(html, /Já vinculado à campanha/);
   assert.match(html, /Mega Feirão de fábrica/);
-  assert.match(html, /data-bot-link-campaign-form/);
-  assert.match(html, /Outra campanha/);
+  assert.doesNotMatch(html, /data-bot-link-campaign-form/, "já vinculado — não oferece vincular de novo");
+  assert.doesNotMatch(html, /data-action="bot-create-campaign"/, "já vinculado — não oferece criar campanha");
+  assert.match(html, /<button type="button" class="button button-quiet" disabled>✓ Campanha já vinculada<\/button>/, "confirmação visual, não clicável");
 
-  const readOnlyHtml = renderBotEventDetail(event, { canModify: false, availableCampaigns: [] });
+  const readOnlyHtml = renderBotEventDetail(notYetLinkedEvent, { canModify: false, availableCampaigns: [] });
   assert.doesNotMatch(readOnlyHtml, /data-bot-link-campaign-form/, "VIEWER não vê o form de vincular");
 
-  const pendingEvent = { ...event, processingStatus: "PENDING_ASSOCIATION", existingExternalLinks: [] };
+  const pendingEvent = { ...notYetLinkedEvent, processingStatus: "PENDING_ASSOCIATION" };
   assert.doesNotMatch(renderBotEventDetail(pendingEvent, { canModify: true, availableCampaigns: [] }), /data-bot-link-campaign-form/, "só oferece vincular campanha depois de classificado como externo");
 }
 
@@ -148,7 +159,12 @@ function makeService({ profile = { id: "profile-1", access_level: "USER" }, camp
   assert.match(html, /Nacarati/);
   assert.match(html, /data-action="end-external-link" data-id="link1"/, "vínculo ativo oferece Encerrar");
   assert.doesNotMatch(html, /data-action="end-external-link" data-id="link2"/, "vínculo já encerrado não oferece Encerrar de novo");
-  assert.match(html, /1 atual/, "contador inclui o número externo ativo");
+  assert.match(html, /1 atual\b/, "contador inclui o número externo ativo, singular correto (\"1 atual\", não \"atualis\")");
+
+  const secondCurrentExternal = { id: "link3", campaignId: "camp1", phoneNormalized: "5511900000000", companyLabel: "Outra Empresa", clientAccountLabel: "Conta2", linkedAt: "2026-01-04T00:00:00.000Z", endedAt: null };
+  const htmlPlural = renderCampaignDetail({ item, clients: [{ id: "client1", name: "Cliente" }], squads: [], numbers: [], links: [], externalLinks: [currentExternal, secondCurrentExternal, historyExternal] });
+  assert.match(htmlPlural, /2 atuais\b/, "plural correto com 2+ números atuais (\"atuais\", nunca \"atualis\")");
+  assert.doesNotMatch(htmlPlural, /atualis/, "nunca gera a palavra errada \"atualis\"");
 }
 
 console.log("Bloco 25 (vincular Cliente/Campanha em números que não são nossos): todos os cenários passaram.");

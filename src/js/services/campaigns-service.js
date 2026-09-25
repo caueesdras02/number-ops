@@ -109,9 +109,13 @@ export class CampaignsService {
 
   /**
    * Diagnóstico (não altera nada): números que têm um cliente associado (clientIds) mas
-   * NÃO possuem vínculo ativo com nenhuma campanha ativa daquele cliente. Sinal de que o
-   * vínculo real pode nunca ter sido criado (ex.: limitação do sistema antigo de só 1
-   * vínculo ativo por número) — precisa de revisão humana, não é corrigido automaticamente.
+   * NUNCA tiveram vínculo NENHUM (nem já encerrado) com uma campanha ativa daquele cliente.
+   * Sinal de que o vínculo real pode nunca ter sido criado (ex.: limitação do sistema antigo
+   * de só 1 vínculo ativo por número) — precisa de revisão humana, não é corrigido
+   * automaticamente. Um vínculo já ENCERRADO com aquela campanha específica conta como "já
+   * revisado" e tira o número da lista — encerrar um vínculo (ex.: número reaproveitado pra
+   * campanhas antigas de propósito) é uma decisão humana deliberada, não um esquecimento; nunca
+   * deveria voltar a pedir revisão da MESMA combinação número/campanha depois disso.
    */
   findClientCampaignGaps() {
     const activeCampaignsByClient = new Map();
@@ -122,10 +126,10 @@ export class CampaignsService {
     const clientName = (id) => this.state.clients.find((item) => item.id === id)?.name ?? "—";
     const gaps = [];
     this.numbers.state.numbers.filter((number) => !number.archivedAt).forEach((number) => {
-      const linkedCampaignIds = new Set(this.activeLinksFor(number.id).map((link) => link.campaignId));
+      const everLinkedCampaignIds = new Set(this.linksFor(number.id).map((link) => link.campaignId));
       (number.clientIds ?? []).forEach((clientId) => {
         (activeCampaignsByClient.get(clientId) ?? []).forEach((campaign) => {
-          if (!linkedCampaignIds.has(campaign.id)) gaps.push({ numberId: number.id, phone: number.phone, identification: number.identification, clientId, clientName: clientName(clientId), campaignId: campaign.id, campaignName: campaign.name });
+          if (!everLinkedCampaignIds.has(campaign.id)) gaps.push({ numberId: number.id, phone: number.phone, identification: number.identification, clientId, clientName: clientName(clientId), campaignId: campaign.id, campaignName: campaign.name });
         });
       });
     });

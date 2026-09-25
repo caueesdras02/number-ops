@@ -250,6 +250,7 @@ const gapState = {
   campaigns: [], numbers: [
     { id: "gn1", phone: "5511988880001", identification: "Chip Gap 1", status: "ACTIVE", groupCount: 0, clientIds: ["gc1"], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
     { id: "gn2", phone: "5511988880002", identification: "Chip Gap 2", status: "ACTIVE", groupCount: 0, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
+    { id: "gn3", phone: "5511988880003", identification: "Chip Gap 3", status: "ACTIVE", groupCount: 0, clientIds: ["gc1"], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
   ],
   numberCampaignLinks: [], incidents: [], historyEvents: [], locations: [],
 };
@@ -269,6 +270,22 @@ assert.ok(!gaps.some((g) => g.numberId === "gn1" && g.campaignId === campaignFor
 
 // 28) número sem esse cliente associado não gera falso positivo
 assert.ok(!gaps.some((g) => g.numberId === "gn2"), "gn2 nunca teve o cliente gc1 associado, não deve aparecer");
+
+// 28b) encerrar o vínculo de propósito (ex.: número reaproveitado pra campanhas antigas do mesmo
+// cliente) NUNCA deve fazer o gap voltar a aparecer — foi uma decisão humana já revisada, não um
+// esquecimento. Cenário real reportado: gn3 continua com gc1 em clientIds (unassign nunca mexe
+// nisso), mas o vínculo com ESSA campanha específica já foi encerrado deliberadamente. Usa gn3
+// (não gn1) pra não interferir no vínculo ativo de gn1 usado pelos testes de "Alterar função" mais abaixo.
+gapCampaigns.assign("gn3", campaignForGc1.id, "SUPPORT");
+gapCampaigns.unassign("gn3", campaignForGc1.id);
+gaps = gapCampaigns.findClientCampaignGaps();
+assert.ok(!gaps.some((g) => g.numberId === "gn3" && g.campaignId === campaignForGc1.id), "vínculo encerrado de propósito não deve reaparecer como gap da MESMA campanha");
+
+// 28c) mas uma campanha ATIVA NOVA do mesmo cliente, com a qual gn3 nunca teve vínculo nenhum
+// (nem encerrado), continua sendo um gap de verdade — a supressão é só pra combinação já revisada.
+const secondCampaignForGc1 = gapCampaigns.create({ name: "Segunda campanha do Cliente com vínculo", clientId: "gc1", squadId: "gs1", responsibleId: "gr1" });
+gaps = gapCampaigns.findClientCampaignGaps();
+assert.ok(gaps.some((g) => g.numberId === "gn3" && g.campaignId === secondCampaignForGc1.id), "campanha nova, sem histórico nenhum com gn3, continua aparecendo como gap");
 
 // 29) painel de diagnóstico só aparece quando há gaps, e some quando não há
 const campaignsListHtml = renderCampaigns({ campaigns: campaigns.list({}), clients: state.clients, squads: state.groups, responsibles: state.responsibles, filters: { query: "", status: "" }, gaps: [] });
