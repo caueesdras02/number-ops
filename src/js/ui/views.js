@@ -16,6 +16,7 @@ const titles = Object.freeze({
   guide: "Boas práticas",
   backup: "Dados e Backup",
   bot: "Number Ops Bot",
+  "client-portal": "Portal do cliente",
 });
 
 export function getViewTitle(viewName) { return titles[viewName] ?? titles.dashboard; }

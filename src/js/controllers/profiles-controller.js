@@ -6,6 +6,20 @@ import { confirmDialog } from "../ui/confirm-dialog.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { isMaster } from "../models/access.js";
 
+/** Acesso de cliente (029): com o nível CLIENT o formulário pede o Cliente acompanhado e esconde o
+ * Squad (que não se aplica); nos outros níveis, o contrário. */
+function bindClientLevelToggle(form, levelField) {
+  const select = form?.elements[levelField];
+  if (!select) return;
+  const sync = () => {
+    const isClient = select.value === "CLIENT";
+    form.querySelector("[data-client-field]")?.toggleAttribute("hidden", !isClient);
+    form.querySelector("[data-squad-field]")?.toggleAttribute("hidden", isClient);
+  };
+  select.addEventListener("change", sync);
+  sync();
+}
+
 export class ProfilesController {
   constructor({ service, authorizationsService = null, content, currentProfile }) { this.service = service; this.authorizationsService = authorizationsService; this.content = content; this.currentProfile = currentProfile; this.data = null; this.authorizations = null; this.query = ""; }
   async render() {
@@ -14,7 +28,7 @@ export class ProfilesController {
       let authorizationsHtml = "";
       if (this.authorizationsService && isMaster(this.currentProfile)) {
         this.authorizations = await this.authorizationsService.list();
-        authorizationsHtml = renderSignupAuthorizations(this.authorizations, this.data.squads);
+        authorizationsHtml = renderSignupAuthorizations(this.authorizations, this.data.squads, this.data.clients);
       }
       this.content.innerHTML = renderProfiles({ ...this.data, currentProfile: this.currentProfile, query: this.query }) + authorizationsHtml;
       // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
@@ -44,14 +58,15 @@ export class ProfilesController {
     const tbody = this.content.querySelector(".table-card tbody");
     if (!tbody || !this.data) return this.render();
     const visible = filterProfiles(this.data.profiles, this.query);
-    tbody.innerHTML = renderProfileRows(visible, this.data.squads, this.currentProfile);
+    tbody.innerHTML = renderProfileRows(visible, this.data.squads, this.currentProfile, this.data.clients);
   }
   openForm(id) {
     const profile = this.data.profiles.find((item) => item.id === id);
     if (!profile) return;
-    this.content.insertAdjacentHTML("beforeend", renderProfileForm(profile, this.data.squads, this.currentProfile));
+    this.content.insertAdjacentHTML("beforeend", renderProfileForm(profile, this.data.squads, this.currentProfile, this.data.clients));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-profile-form"]').forEach((button) => button.addEventListener("click", close));
+    bindClientLevelToggle(this.content.querySelector("#profile-form"), "access_level");
     this.content.querySelector("#profile-form")?.addEventListener("submit", async (event) => {
       event.preventDefault();
       try { await this.service.update(id, Object.fromEntries(new FormData(event.currentTarget)), this.currentProfile); showToast("Usuário atualizado.", "success"); await this.render(); }
@@ -77,10 +92,11 @@ export class ProfilesController {
     } catch (error) { showToast(error.message, "error"); }
   }
   openAuthorizationForm() {
-    this.content.insertAdjacentHTML("beforeend", renderSignupAuthorizationForm(this.data.squads, isMaster(this.currentProfile)));
+    this.content.insertAdjacentHTML("beforeend", renderSignupAuthorizationForm(this.data.squads, isMaster(this.currentProfile), this.data.clients));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-authorization-form"]').forEach((button) => button.addEventListener("click", close));
     const form = this.content.querySelector("#authorization-form");
+    bindClientLevelToggle(form, "accessLevel");
     form?.addEventListener("submit", (event) => guardedSubmit(form, event, async () => {
       try {
         const values = Object.fromEntries(new FormData(form));

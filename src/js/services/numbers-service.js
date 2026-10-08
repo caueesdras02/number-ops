@@ -6,9 +6,13 @@ import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete
 import { HistoryService } from "./history-service.js";
 
 export class NumbersService {
-  constructor(repository, { hardDeletePort = null } = {}) {
+  constructor(repository, { hardDeletePort = null, scopeSquadId = null } = {}) {
     this.repository = repository;
     this.hardDeletePort = hardDeletePort;
+    // Squad do USER/VIEWER logado (null = MASTER/ADMIN ou modo local, sem escopo). O RLS
+    // (migrations 025-027) é quem isola de verdade; aqui só garantimos que um número
+    // cadastrado/editado por um USER continue no Squad dele.
+    this.scopeSquadId = scopeSquadId;
     this.state = repository.initialize();
     this.state.campaigns ??= [];
     this.state.numberCampaignLinks ??= [];
@@ -70,7 +74,8 @@ export class NumbersService {
     const phone = this.validatePhone(input.phone);
     this.assertPhoneIsUnique(phone);
     const groupCount = this.validateGroupCount(input.groupCount);
-    const number = createNumber({ ...input, phone, groupCount });
+    const groupIds = this.withScopeSquad(input.groupIds ?? []);
+    const number = createNumber({ ...input, phone, groupCount, groupIds });
     this.state.numbers = [...this.state.numbers, number];
     this.persist();
     this.record(number.id, "NUMBER_CREATED", historyDescription, { newValue: number, ...historyMetadata });
@@ -91,7 +96,9 @@ export class NumbersService {
       locationId: input.locationId || null,
       responsibleId: input.responsibleId || null,
       clientIds: input.clientIds ?? existing.clientIds ?? [],
-      groupIds: input.groupIds ?? existing.groupIds ?? [],
+      // Número que já está no Squad do USER não sai dele por uma edição (número de "estoque",
+      // sem Squad, não é puxado automaticamente — só quando a pessoa marca o Squad).
+      groupIds: (existing.groupIds ?? []).includes(this.scopeSquadId) ? this.withScopeSquad(input.groupIds ?? existing.groupIds ?? []) : input.groupIds ?? existing.groupIds ?? [],
       groupCount,
       notes: (input.notes ?? existing.notes ?? "").trim(),
       updatedAt: now(),
@@ -180,6 +187,20 @@ export class NumbersService {
     applyLocalHardDelete(this.state, "numbers", id);
     this.persist();
     return existing;
+  }
+
+  withScopeSquad(groupIds) {
+    return this.scopeSquadId && !groupIds.includes(this.scopeSquadId) ? [...groupIds, this.scopeSquadId] : groupIds;
+  }
+
+  /**
+   * Desfaz no estado local um número recém-criado que o banco recusou (ex.: telefone já
+   * cadastrado em outro Squad, invisível para este usuário). Sem isso o número e seu evento
+   * de histórico ficariam no estado e TODO save seguinte tentaria reenviá-los e falharia.
+   */
+  discardUnsyncedNumber(id) {
+    this.state.numbers = this.state.numbers.filter((number) => number.id !== id);
+    this.state.historyEvents = this.state.historyEvents.filter((event) => event.numberId !== id);
   }
 
   persist() { return this.repository.save(this.state); }

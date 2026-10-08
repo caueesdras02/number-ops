@@ -31,7 +31,10 @@ import { SignupAuthorizationsService } from "./services/signup-authorizations-se
 import { AuditLogService } from "./services/audit-log-service.js";
 import { AuditLogController } from "./controllers/audit-log-controller.js";
 import { AboutController } from "./controllers/about-controller.js";
-import { ACCESS_LEVEL_LABELS, isAdminOrAbove, isMaster } from "./models/access.js";
+import { ACCESS_LEVEL_LABELS, isAdminOrAbove, isMaster, isSquadScoped, scopeSquadIdOf, isClientAccess } from "./models/access.js";
+import { ClientPortalService } from "./services/client-portal-service.js";
+import { ClientPortalController } from "./controllers/client-portal-controller.js";
+import { showToast } from "./ui/toast.js";
 import { initTheme, bindThemeToggles } from "./ui/theme-toggle.js";
 import { PushService } from "./services/push-service.js";
 import { bindPushToggle } from "./ui/push-toggle.js";
@@ -39,6 +42,7 @@ import { VAPID_PUBLIC_KEY } from "./config/supabase-runtime.js";
 import { observeTableScrollHints } from "./ui/table-scroll-hint.js";
 import { observeSearchableSelects } from "./ui/searchable-select.js";
 import { bindGlobalSearch } from "./ui/global-search.js";
+import { startBotNavBadge } from "./ui/bot-nav-badge.js";
 
 initTheme();
 bindThemeToggles();
@@ -57,11 +61,12 @@ let controllers=null;
 bindGlobalSearch({ trigger: document.querySelector("[data-global-search-trigger]"), getState: () => controllers?.numbersService?.state ?? { numbers: [], clients: [], groups: [], responsibles: [], locations: [], campaigns: [] } });
 let profilesController=null;
 let auditLogController=null;
+let clientPortalPreview=null;
 let internalRoutesEnabled=false;
 new AboutController({trigger:document.querySelector("[data-about-open]")}).bind();
 
 function createOperationalControllers(repository,{runLegacyMaintenance=false,hardDeletePort=null,integrationEventsRepository=null,externalNumbersRepository=null,incidentsRepository=null,historyEventsRepository=null,externalNumberCampaignLinksRepository=null,currentProfile=null}={}) {
-  const numbersService=new NumbersService(repository,{hardDeletePort});
+  const numbersService=new NumbersService(repository,{hardDeletePort,scopeSquadId:scopeSquadIdOf(currentProfile)});
   if(runLegacyMaintenance) {
     const migration=new ApprovedSpreadsheetMigrationService(numbersService).run();
     const cleanup=new TestDataCleanupService(numbersService).run();
@@ -80,7 +85,8 @@ function createOperationalControllers(repository,{runLegacyMaintenance=false,har
     history:new HistoryController({service:new HistoryService(numbersService),numbers:numbersService,content}),
     dashboard:new DashboardController({service:new DashboardService(numbersService),content}),
     guide:new GuideController({content}),
-    backup:new BackupController({service:new BackupService(numbersService),content}),
+    // Restaurar sobrescreve dados compartilhados — só MASTER/ADMIN (ou modo local, sem profile).
+    backup:new BackupController({service:new BackupService(numbersService),content,canRestore:!currentProfile||isAdminOrAbove(currentProfile)}),
     // Central Number Ops Bot — leitura. Sem repository (modo local/offline) ela
     // mesma mostra um estado "indisponível", sem quebrar a rota.
     bot:new BotController({service:new BotService({integrationEventsRepository,externalNumbersRepository,incidentsRepository,historyEventsRepository,externalNumberCampaignLinksRepository,numbersService,currentProfile}),campaignsService,content}),
@@ -126,6 +132,10 @@ function showView(viewName) {
   else if(view==="activity"&&auditLogController)auditLogController.render();
   else if(view==="activity"){window.location.hash="#dashboard";return;}
   else if(view==="bot")controllers.bot.render();
+  // Pré-visualização do Portal do cliente (só MASTER/ADMIN; o banco também só aceita o
+  // cliente informado de quem tem escopo global).
+  else if(view==="client-portal"&&resourceId&&clientPortalPreview)clientPortalPreview.render(resourceId,{preview:true});
+  else if(view==="client-portal"){window.location.hash="#dashboard";return;}
   // Diretórios (Clientes/Squads/Colaboradores): "#tipo/id" abre direto no detalhe — mesmo padrão
   // já usado por Números/Campanhas/Ocorrências. Sem isso, só dava pra abrir o detalhe clicando
   // dentro da própria listagem (nada linkava direto pra um registro específico).
@@ -153,6 +163,14 @@ mobileNavClose.addEventListener("click",()=>setMobileNavigation(false));
 navigationLinks.forEach((link)=>link.addEventListener("click",()=>setMobileNavigation(false)));
 window.addEventListener("keydown",(event)=>{if(event.key==="Escape"){content.querySelector(".modal-backdrop")?.remove();setMobileNavigation(false);}});
 window.matchMedia("(min-width: 861px)").addEventListener("change",(event)=>{if(event.matches)setMobileNavigation(false);});
+
+function addProfileLabel(profile){
+  const profileLabel=document.createElement("span");
+  profileLabel.dataset.profileLabel="";
+  profileLabel.className="environment-label";
+  profileLabel.textContent=`${profile.name} · ${ACCESS_LEVEL_LABELS[profile.access_level]??profile.access_level}`;
+  logoutButton.before(profileLabel);
+}
 
 function clearAuthHash(){ window.history.replaceState(null,"",window.location.pathname+window.location.search); }
 
@@ -195,25 +213,46 @@ async function bootstrap() {
   if(!authenticated){await authController.render();bindThemeToggles();return;}
   appShell.classList.remove("is-auth-screen");
   appShell.dataset.accessLevel=authenticated.profile.access_level;
+  const clientPortalService=new ClientPortalService({rpc:(name,args)=>supabase.rpc(name,args)});
+  // Acesso de cliente (CLIENT): só o Portal do cliente — nenhum dado interno é carregado
+  // (nem o estado compartilhado, nem push, nem o contador do Bot). O banco já garante isso
+  // (029); aqui é só para o app nem tentar.
+  if(isClientAccess(authenticated.profile)) {
+    title.textContent="Acompanhamento";
+    addProfileLabel(authenticated.profile);
+    authController.bindLogout(logoutButton);
+    const portal=new ClientPortalController({service:clientPortalService,content});
+    await portal.render();
+    portal.startAutoRefresh();
+    // Sino de "seu chip caiu" (030): sem preferência de Squad — a Edge Function só manda ao
+    // cliente as quedas dos chips das campanhas dele.
+    initPush(repositories.pushSubscriptions,authenticated.profile.id).catch(()=>{ /* notificação nunca pode travar o portal */ });
+    bindThemeToggles();
+    authService.onAuthStateChange((event)=>{if(event==="SIGNED_OUT")window.location.reload();});
+    return;
+  }
   content.innerHTML='<section class="directory-empty"><div><h2>Carregando dados compartilhados…</h2><p>Sincronizando com o Supabase.</p></div></section>';
   const remoteRepository=await SupabaseStateRepository.create(supabase);
   const hardDeletePort={numbers:repositories.numbers,clients:repositories.clients,groups:repositories.squads,responsibles:repositories.responsibles,locations:repositories.locations,campaigns:repositories.campaigns};
   controllers=createOperationalControllers(remoteRepository,{hardDeletePort,integrationEventsRepository:repositories.integrationEvents,externalNumbersRepository:repositories.externalNumbers,incidentsRepository:repositories.incidents,historyEventsRepository:repositories.historyEvents,externalNumberCampaignLinksRepository:repositories.externalNumberCampaignLinks,currentProfile:authenticated.profile});
-  profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads),authorizationsService:new SignupAuthorizationsService(repositories.signupAuthorizations),content,currentProfile:authenticated.profile});
+  profilesController=new ProfilesController({service:new ProfilesService(repositories.profiles,repositories.squads,repositories.clients),authorizationsService:new SignupAuthorizationsService(repositories.signupAuthorizations),content,currentProfile:authenticated.profile});
   if(isAdminOrAbove(authenticated.profile)) auditLogController=new AuditLogController({service:new AuditLogService({repository:repositories.auditLogs,profilesRepository:repositories.profiles,squadsRepository:repositories.squads,numbersService:controllers.numbersService,currentProfile:authenticated.profile}),content});
   document.querySelectorAll("[data-admin-only]").forEach((item)=>{item.hidden=!isAdminOrAbove(authenticated.profile);});
   document.querySelectorAll("[data-master-only]").forEach((item)=>{item.hidden=!isMaster(authenticated.profile);});
-  const profileLabel=document.createElement("span");
-  profileLabel.dataset.profileLabel="";
-  profileLabel.className="environment-label";
-  profileLabel.textContent=`${authenticated.profile.name} · ${ACCESS_LEVEL_LABELS[authenticated.profile.access_level]??authenticated.profile.access_level}`;
-  logoutButton.before(profileLabel);
+  if(isAdminOrAbove(authenticated.profile)) clientPortalPreview=new ClientPortalController({service:clientPortalService,content});
+  addProfileLabel(authenticated.profile);
   authController.bindLogout(logoutButton);
   internalRoutesEnabled=true;
+  // Contador de alertas pendentes da Central Number Ops Bot no menu lateral (só a contagem,
+  // atualizada a cada minuto e ao voltar pra aba). Respeita o RLS: cada um vê o que pode ver.
+  startBotNavBadge(()=>controllers.bot.service.pendingCount());
   initPush(repositories.pushSubscriptions,authenticated.profile.id,{squadsRepository:repositories.pushSubscriptionSquads,squads:controllers.numbersService.state.groups.filter((group)=>group.isActive)}).catch(()=>{ /* notificação nunca pode travar o resto do app */ });
   showView(currentView());
   updateStickyHeader();
   bindThemeToggles();
+  // USER/VIEWER só enxergam o próprio Squad (RLS, migrations 025-027) — sem Squad no perfil,
+  // nenhum dado operacional chega. Avisa em vez de deixar a tela parecer "vazia por erro".
+  if(isSquadScoped(authenticated.profile)&&!authenticated.profile.squad_id) showToast("Seu usuário ainda não está associado a um Squad, por isso nenhum dado operacional aparece. Peça a um administrador para definir seu Squad.","warning",15000);
   authService.onAuthStateChange((event)=>{if(event==="SIGNED_OUT")window.location.reload();});
 }
 

@@ -34,6 +34,19 @@ const supabase = createClient(SUPABASE_URL ?? "", SERVICE_ROLE_KEY ?? "", {
   auth: { persistSession: false },
 });
 
+// Vínculos ativos (ended_at nulo) de `table` filtrados por `column = value`, resolvidos para
+// { clientId, campaignName } — usado tanto para chip nosso (number_campaign_links) quanto para
+// chip externo de cliente (external_number_campaign_links).
+async function activeClientCampaigns(table, column, value) {
+  const { data: links, error } = await supabase.from(table).select("campaign_id").eq(column, value).is("ended_at", null);
+  if (error) throw error;
+  const campaignIds = [...new Set((links ?? []).map((row) => row.campaign_id))];
+  if (!campaignIds.length) return [];
+  const { data: campaigns, error: campaignsError } = await supabase.from("campaigns").select("id,name,client_id").in("id", campaignIds);
+  if (campaignsError) throw campaignsError;
+  return (campaigns ?? []).filter((row) => row.client_id).map((row) => ({ clientId: row.client_id, campaignName: row.name }));
+}
+
 const deps = {
   async getIncidentContext(incidentId) {
     const { data: incident, error } = await supabase
@@ -64,6 +77,10 @@ const deps = {
       clientName = client?.name ?? null;
     }
 
+    // Campanhas em que o número está AGORA (acesso de cliente, 029/030): define quais clientes
+    // recebem a queda e qual campanha aparece no texto de cada um.
+    const clientCampaigns = incident.number_id ? await activeClientCampaigns("number_campaign_links", "number_id", incident.number_id) : [];
+
     return {
       id: incident.id,
       classification: incident.classification,
@@ -73,11 +90,16 @@ const deps = {
       campaignName: campaignAndClient.data?.name ?? null,
       clientName,
       numberSquadIds: (numberSquads ?? []).map((row) => row.squad_id),
+      clientCampaigns,
     };
+  },
+  // Chip EXTERNO (de cliente) que caiu: campanhas ativas às quais ele está vinculado (023).
+  async getExternalAlertContext(phone) {
+    return activeClientCampaigns("external_number_campaign_links", "phone_normalized", phone);
   },
   async listSubscriptions() {
     const [{ data: subscriptions, error }, { data: preferences }] = await Promise.all([
-      supabase.from("push_subscriptions").select("id,endpoint,p256dh,auth_key"),
+      supabase.from("push_subscriptions").select("id,endpoint,p256dh,auth_key,profile_id"),
       supabase.from("push_subscription_squads").select("subscription_id,squad_id"),
     ]);
     if (error) throw error;
@@ -86,7 +108,21 @@ const deps = {
       if (!squadIdsBySubscription.has(row.subscription_id)) squadIdsBySubscription.set(row.subscription_id, []);
       squadIdsBySubscription.get(row.subscription_id).push(row.squad_id);
     }
-    return (subscriptions ?? []).map((row) => ({ id: row.id, endpoint: row.endpoint, p256dh: row.p256dh, authKey: row.auth_key, squadIds: squadIdsBySubscription.get(row.id) ?? [] }));
+    // Perfil do dono de cada inscrição — o handler só envia o que esse perfil pode ver.
+    const profileIds = [...new Set((subscriptions ?? []).map((row) => row.profile_id))];
+    const { data: profiles, error: profilesError } = profileIds.length
+      ? await supabase.from("profiles").select("id,access_level,squad_id,client_id,status").in("id", profileIds)
+      : { data: [], error: null };
+    if (profilesError) throw profilesError;
+    const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+    return (subscriptions ?? []).map((row) => {
+      const profile = profileById.get(row.profile_id);
+      return {
+        id: row.id, endpoint: row.endpoint, p256dh: row.p256dh, authKey: row.auth_key,
+        squadIds: squadIdsBySubscription.get(row.id) ?? [],
+        recipient: profile ? { accessLevel: profile.access_level, squadId: profile.squad_id, clientId: profile.client_id ?? null, active: profile.status === "ACTIVE" } : null,
+      };
+    });
   },
   async sendPush(subscription, payload) {
     await webpush.sendNotification(

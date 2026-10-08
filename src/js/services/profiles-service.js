@@ -5,11 +5,11 @@ const STATUSES = new Set(["ACTIVE", "INACTIVE"]);
 const LEVELS = new Set(ACCESS_LEVELS);
 
 export class ProfilesService {
-  constructor(profilesRepository, squadsRepository) { this.profilesRepository = profilesRepository; this.squadsRepository = squadsRepository; }
+  constructor(profilesRepository, squadsRepository, clientsRepository = null) { this.profilesRepository = profilesRepository; this.squadsRepository = squadsRepository; this.clientsRepository = clientsRepository; }
 
   async list() {
-    const [profiles, squads] = await Promise.all([this.profilesRepository.list(), this.squadsRepository.list()]);
-    return { profiles: profiles.sort((a, b) => a.name.localeCompare(b.name, "pt-BR")), squads };
+    const [profiles, squads, clients] = await Promise.all([this.profilesRepository.list(), this.squadsRepository.list(), this.clientsRepository ? this.clientsRepository.list() : Promise.resolve([])]);
+    return { profiles: profiles.sort((a, b) => a.name.localeCompare(b.name, "pt-BR")), squads, clients: clients.filter((client) => client.is_active !== false).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")) };
   }
 
   async update(id, input, currentProfile) {
@@ -40,9 +40,13 @@ export class ProfilesService {
       throw new Error("Você não pode desativar ou alterar o próprio nível de acesso.");
     }
     assertLastMasterSafe(profiles, id, { nextLevel, nextStatus: input.status });
+    // Acesso de cliente (029): vinculado a UM cliente, nunca a Squad.
+    const isClient = nextLevel === "CLIENT";
+    if (isClient && !input.client_id) throw new Error("Selecione o cliente que este acesso vai acompanhar.");
 
     return this.profilesRepository.update(id, {
-      name, job_title: input.job_title, squad_id: input.squad_id || null,
+      name, job_title: input.job_title, squad_id: isClient ? null : input.squad_id || null,
+      client_id: isClient ? input.client_id : null,
       status: input.status, access_level: nextLevel, updated_at: new Date().toISOString(),
     });
   }

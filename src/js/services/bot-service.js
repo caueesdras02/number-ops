@@ -19,7 +19,7 @@
 // acontece no backend (supabase/functions/telegram-webhook/handler.js) —
 // este serviço só lê/grava a memória, não reprocessa eventos passados
 // automaticamente.
-import { canOperate } from "../models/access.js";
+import { canOperate, hasGlobalScope } from "../models/access.js";
 import { canonicalBrazilianPhone } from "../models/phone.js";
 import { createId, now } from "../models/helpers.js";
 import { normalizeSearchText } from "../models/search-match.js";
@@ -107,6 +107,12 @@ export class BotService {
     if (!this.canModify) throw new Error("Você não tem permissão para realizar esta ação.");
   }
 
+  /** A memória de números externos é GLOBAL (afeta a ingestão de alertas de todos os Squads) —
+   * só MASTER/ADMIN classificam/revertem (mesma regra do RLS, migration 027). */
+  assertCanManageExternalNumbers() {
+    if (!hasGlobalScope(this.currentProfile)) throw new Error("Somente MASTER ou ADMIN podem classificar números como não pertencentes à operação.");
+  }
+
   async load() {
     if (!this.repository) return { available: false, events: [], metrics: this.emptyMetrics(), canModify: false };
     const [rows, externalRows] = await Promise.all([
@@ -163,6 +169,16 @@ export class BotService {
     return { campaignId: oldCampaign.id, campaignName: oldCampaign.name, clientId: client.id, clientName: client.name };
   }
 
+  /** Alertas aguardando ação ("Sem número associado") — alimenta o contador do menu lateral sem
+   * precisar carregar a Central inteira. Usa só a contagem (count/head) quando o repositório
+   * suporta; senão cai pro list(). Sem repositório (modo local) não há alertas: 0. */
+  async pendingCount() {
+    if (!this.repository) return 0;
+    if (typeof this.repository.count === "function") return this.repository.count({ processing_status: "PENDING_ASSOCIATION" });
+    const rows = await this.repository.list();
+    return rows.filter((row) => row.processing_status === "PENDING_ASSOCIATION").length;
+  }
+
   emptyMetrics() { return { total: 0, matched: 0, pending: 0, notOwned: 0, openConnectivity: this.openConnectivityCount() }; }
 
   computeMetrics(events) {
@@ -196,6 +212,7 @@ export class BotService {
    */
   async markNotOwned(eventId, event) {
     this.assertCanModify();
+    this.assertCanManageExternalNumbers();
     if (!this.externalNumbersRepository) throw new Error("Memória de números externos não disponível.");
     if (event.processingStatus !== "PENDING_ASSOCIATION") throw new Error("Este evento não está pendente de associação.");
     const canonicalPhone = canonicalBrazilianPhone(event.phoneNormalized);
@@ -235,6 +252,7 @@ export class BotService {
    * Alertas futuros desse telefone voltam a poder virar PENDING_ASSOCIATION normalmente. */
   async revertNotOwned(externalNumberId) {
     this.assertCanModify();
+    this.assertCanManageExternalNumbers();
     if (!this.externalNumbersRepository) throw new Error("Memória de números externos não disponível.");
     await this.externalNumbersRepository.update(externalNumberId, {
       reverted_at: now(),

@@ -15,7 +15,8 @@ import { renderIncidentForm } from "../src/js/ui/incidents-view.js";
 // ---------------------------------------------------------------------------
 // access.js
 // ---------------------------------------------------------------------------
-assert.deepEqual(ACCESS_LEVELS, ["MASTER", "ADMIN", "USER", "VIEWER"]);
+// CLIENT (028/029) é um acesso externo, só leitura, fora da hierarquia interna — vem por último.
+assert.deepEqual(ACCESS_LEVELS, ["MASTER", "ADMIN", "USER", "VIEWER", "CLIENT"]);
 assert.ok(isMaster({ access_level: "MASTER" }));
 assert.ok(!isMaster({ access_level: "ADMIN" }));
 

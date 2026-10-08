@@ -14,7 +14,9 @@ function makeDeps({ incidents = {}, subscriptions = [], sendResult = {} } = {}) 
   return {
     deletedIds, sentTo,
     async getIncidentContext(id) { return incidents[id] ?? null; },
-    async listSubscriptions() { return subscriptions; },
+    // Cenários deste bloco são da equipe interna com acesso global: dono ADMIN por padrão. O
+    // escopo por perfil (USER/VIEWER/CLIENT) é coberto no bloco 36.
+    async listSubscriptions() { return subscriptions.map((subscription) => ({ recipient: { accessLevel: "ADMIN", squadId: null, clientId: null, active: true }, ...subscription })); },
     async sendPush(subscription, payload) {
       sentTo.push({ subscriptionId: subscription.id, payload });
       const failure = sendResult[subscription.id];

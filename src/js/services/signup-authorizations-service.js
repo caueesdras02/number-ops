@@ -18,11 +18,14 @@ export class SignupAuthorizationsService {
     return rows.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
   }
 
-  async create({ email, accessLevel, squadId }, currentProfile) {
+  async create({ email, accessLevel, squadId, clientId }, currentProfile) {
     if (!isMaster(currentProfile)) throw new Error("Somente MASTER pode autorizar novos cadastros.");
     const normalizedEmail = String(email ?? "").trim().toLowerCase();
     if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
     if (!LEVELS.has(accessLevel)) throw new Error("Selecione um nível de acesso válido.");
+    // Acesso de cliente (029): vinculado a UM cliente, nunca a Squad.
+    const isClient = accessLevel === "CLIENT";
+    if (isClient && !clientId) throw new Error("Selecione o cliente que este acesso vai acompanhar.");
 
     const existing = await this.repository.list();
     if (existing.some((row) => row.email === normalizedEmail && row.status === "PENDING")) {
@@ -34,7 +37,8 @@ export class SignupAuthorizationsService {
       id: createId("signup_auth"),
       email: normalizedEmail,
       access_level: accessLevel,
-      squad_id: squadId || null,
+      squad_id: isClient ? null : squadId || null,
+      client_id: isClient ? clientId : null,
       status: "PENDING",
       created_by: currentProfile.id,
       used_by: null,

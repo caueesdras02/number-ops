@@ -4,7 +4,28 @@ import { LocalStorageRepository } from "./local-storage-repository.js";
 import { APP_STORAGE_KEY } from "../config/constants.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const check = ({ data, error }) => { if (error) throw error; return data; };
+/**
+ * Traduz os erros do banco que o isolamento por Squad (migrations 025-027) torna esperados:
+ * - 23505 em numbers.phone: o telefone já existe, possivelmente em outro Squad (invisível pra
+ *   quem está cadastrando). Mensagem genérica — `duplicatePhone` deixa o controller desfazer o
+ *   número local que nunca foi gravado.
+ * - 42501 (RLS): registro fora do Squad do usuário (ex.: dado movido de Squad por um ADMIN
+ *   com esta aba aberta).
+ * Mantém `code` original pra quem já trata códigos (ex.: 23505 no BotService).
+ */
+export function translateDatabaseError(error) {
+  if (!error) return error;
+  const raw = `${error.message ?? ""} ${error.details ?? ""}`;
+  let translated = null;
+  if (error.code === "23505" && /numbers_phone_key|\(phone\)/i.test(raw)) {
+    translated = Object.assign(new Error("Este telefone já está cadastrado no Number Ops."), { duplicatePhone: true });
+  } else if (error.code === "42501") {
+    translated = new Error("Você não tem permissão para alterar este registro — ele pode pertencer a outro Squad. Recarregue a página para atualizar os dados.");
+  }
+  if (!translated) return error;
+  return Object.assign(translated, { code: error.code, cause: error });
+}
+const check = ({ data, error }) => { if (error) throw translateDatabaseError(error); return data; };
 // Filtro temporário: estas 4 linhas (vínculos "Apoio" de um teste em "Live do Líder") foram
 // excluídas de verdade em public.number_campaign_links (confirmado via SQL Editor: um SELECT
 // pelos ids não retorna nenhuma linha), mas o Supabase continuou devolvendo elas num fetch

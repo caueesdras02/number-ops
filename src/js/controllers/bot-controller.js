@@ -5,6 +5,7 @@ import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { matchesSearch } from "../models/search-match.js";
 import { setPendingCampaignPrefill } from "../models/pending-campaign-prefill.js";
+import { updateBotNavBadge } from "../ui/bot-nav-badge.js";
 
 export class BotController {
   // campaignsService: só pra reaproveitar close() (mesmo fluxo oficial usado em Campanhas) na
@@ -12,7 +13,7 @@ export class BotController {
   constructor({ service, campaignsService = null, content }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.filters = {}; this.data = null; }
 
   async render() {
-    try { this.data = await this.service.load(); this.paint(); }
+    try { this.data = await this.service.load(); this.paint(); if (this.data.available) updateBotNavBadge(this.data.metrics.pending); }
     catch (error) { this.content.innerHTML = `<div class="backup-feedback" role="alert">${escapeHtml(error.message)}</div>`; }
   }
 

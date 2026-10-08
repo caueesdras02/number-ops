@@ -4,6 +4,8 @@ export class SupabaseRepository {
   async get(id) { const { data, error } = await this.client.from(this.table).select("*").eq("id", id).maybeSingle(); if (error) throw error; return data; }
   async upsert(record) { const { data, error } = await this.client.from(this.table).upsert(record).select().single(); if (error) throw error; return data; }
   async update(id, changes) { const { data, error } = await this.client.from(this.table).update(changes).eq("id", id).select().single(); if (error) throw error; return data; }
+  /** Só a contagem (head: true — nenhuma linha trafega), já respeitando o RLS de quem está logado. */
+  async count(equals = {}) { let query = this.client.from(this.table).select("id", { count: "exact", head: true }); for (const [column, value] of Object.entries(equals)) query = query.eq(column, value); const { count, error } = await query; if (error) throw error; return count ?? 0; }
   async remove(id) { const { error } = await this.client.from(this.table).delete().eq("id", id); if (error) throw error; }
 }
 

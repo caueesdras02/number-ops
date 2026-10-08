@@ -112,7 +112,7 @@ export class NumbersController {
 
   openForm(id = null, message = "") {
     const number = id ? this.service.getNumber(id) : null;
-    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message }));
+    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message, lockedGroupId: this.service.scopeSquadId }));
     const form = this.content.querySelector("#number-form");
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
@@ -140,14 +140,18 @@ export class NumbersController {
   async submitForm(form) {
     const formData = new FormData(form);
     const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
+    const editing = Boolean(form.dataset.id);
+    let created = null;
     try {
-      const editing = Boolean(form.dataset.id);
-      editing ? this.service.update(form.dataset.id, values) : this.service.create(values);
+      if (editing) this.service.update(form.dataset.id, values); else created = this.service.create(values);
       await this.service.flush();
       this.closeForm();
       this.render();
       showToast(editing ? 'Número atualizado com sucesso.' : 'Número cadastrado com sucesso.', 'success');
     } catch (error) {
+      // Telefone recusado pelo banco (ex.: já cadastrado em outro Squad, que este usuário não
+      // enxerga) — o número nunca foi gravado, então sai do estado local também.
+      if (created && error?.duplicatePhone) this.service.discardUnsyncedNumber(created.id);
       showToast(error.message, 'error');
       this.closeForm(); this.openForm(form.dataset.id || null, error.message);
     }
