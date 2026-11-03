@@ -47,10 +47,28 @@ export class NumbersService {
 
   /** Número "nomeado por cliente": identificação contém o nome de um Cliente cadastrado
    * (ex.: "CHIP ZIG 03" bate com o cliente ZIG) — "Tim" nunca conta (é operadora, não
-   * cliente). Derivado, nunca armazenado: se a identificação ou o nome do cliente mudar,
-   * o número troca de aba sozinho no próximo render. */
+   * cliente). Derivado por padrão (nunca armazenado): se a identificação ou o nome do
+   * cliente mudar, o número troca de aba sozinho no próximo render — a MENOS que
+   * clientNumberOverride esteja definido (true/false), caso em que a decisão manual
+   * sempre vence a detecção automática por texto. */
   isClientNamed(number) {
+    if (number.clientNumberOverride === true) return true;
+    if (number.clientNumberOverride === false) return false;
     return matchesClientName(number.identification, this.state.clients);
+  }
+
+  /** Força manualmente (value: true/false) ou limpa (value: null, volta a ser automático) a
+   * classificação de "número de cliente", independente do texto da identificação. */
+  setClientNumberOverride(id, value) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    if (existing.clientNumberOverride === value) return existing;
+    const updated = { ...existing, clientNumberOverride: value, updatedAt: now() };
+    this.state.numbers = this.state.numbers.map((number) => number.id === id ? updated : number);
+    this.persist();
+    const description = value === true ? "Marcado manualmente como número de cliente." : value === false ? "Marcado manualmente como fora de números de clientes." : "Classificação de número de cliente voltou a ser automática.";
+    this.record(id, "CLIENT_NUMBER_OVERRIDE_CHANGED", description, { previousValue: existing.clientNumberOverride ?? null, newValue: value });
+    return updated;
   }
 
   /** Lista principal — nunca inclui arquivados (Bloqueado = sempre arquivado agora, ver

@@ -64,4 +64,4 @@ const customHtml = renderNumbersView([], [], [], "", {}, [], [], true, [], [], {
 assert.match(customHtml, /<h2>Números de Clientes<\/h2>/);
 assert.match(customHtml, /id="client-number-search"/);
 
-console.log("Bloco 26: aba Números de Clientes (detecção por nome de cliente, exceção Tim, prioridade de arquivado) validada.");
+console.log("Bloco 40: aba Números de Clientes (detecção por nome de cliente, exceção Tim, prioridade de arquivado) validada.");

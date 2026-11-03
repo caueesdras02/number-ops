@@ -40,7 +40,7 @@ const GHOST_NUMBER_CAMPAIGN_LINK_IDS = new Set([
 ]);
 // Substitui Object.groupBy (indisponível em navegadores anteriores a 2024).
 const groupBy = (items, keyOf) => items.reduce((acc, item) => { const key = keyOf(item); (acc[key] ??= []).push(item); return acc; }, {});
-const camelNumber = (row, clientIds, groupIds, restriction) => ({ id:row.id,phone:row.phone,identification:row.identification,status:row.status,locationId:row.location_id,responsibleId:row.responsible_id,clientIds,groupIds,groupCount:row.group_count,notes:row.notes,restriction,archivedAt:row.archived_at,createdAt:row.created_at,updatedAt:row.updated_at });
+const camelNumber = (row, clientIds, groupIds, restriction) => ({ id:row.id,phone:row.phone,identification:row.identification,status:row.status,locationId:row.location_id,responsibleId:row.responsible_id,clientIds,groupIds,groupCount:row.group_count,notes:row.notes,restriction,clientNumberOverride:row.client_number_override ?? null,archivedAt:row.archived_at,createdAt:row.created_at,updatedAt:row.updated_at });
 const named = (row) => ({ id:row.id,name:row.name,isActive:row.is_active,createdAt:row.created_at,updatedAt:row.updated_at });
 
 export class SupabaseStateRepository {
@@ -98,7 +98,7 @@ export class SupabaseStateRepository {
     const clientRow=(x)=>({id:x.id,name:x.name,squad_id:x.squadId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
     const responsibleRow=(x)=>({id:x.id,name:x.name,team:x.team||"",squad_id:x.squadId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
     const locationRow=(x)=>({id:x.id,name:x.name,responsible_id:x.responsibleId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
-    const numberRow=(x)=>({id:x.id,phone:x.phone,identification:x.identification,status:x.status,location_id:x.locationId||null,responsible_id:x.responsibleId||null,group_count:x.groupCount??0,notes:x.notes||"",archived_at:x.archivedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
+    const numberRow=(x)=>({id:x.id,phone:x.phone,identification:x.identification,status:x.status,location_id:x.locationId||null,responsible_id:x.responsibleId||null,group_count:x.groupCount??0,notes:x.notes||"",client_number_override:x.clientNumberOverride??null,archived_at:x.archivedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
     const campaignRow=(x)=>({id:x.id,name:x.name,client_id:x.clientId,squad_id:x.squadId,responsible_id:x.responsibleId||null,notes:x.notes||"",status:x.status,stage:x.stage||"CAPTACAO",started_at:x.startedAt,ended_at:x.endedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
     const linkRow=(x)=>({id:x.id,number_id:x.numberId,campaign_id:x.campaignId,role:x.role,started_at:x.startedAt,ended_at:x.endedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});
     const incidentRow=(x)=>({id:x.id,number_id:x.numberId,type:x.type,title:x.title,description:x.description||"",status:x.status,responsible_id:x.responsibleId||null,resolution_notes:x.resolutionNotes||"",resolved_by_id:x.resolvedById||null,resolved_at:x.resolvedAt||null,created_at:x.createdAt,updated_at:x.updatedAt});

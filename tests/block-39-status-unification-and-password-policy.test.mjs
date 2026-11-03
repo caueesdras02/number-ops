@@ -108,4 +108,4 @@ const reuseGaps = reuseCampaigns.findClientCampaignGaps();
 assert.ok(!reuseGaps.some((g) => g.numberId === "nr1"), "squad que reutiliza chips não deve gerar aviso de lacuna");
 assert.ok(reuseGaps.some((g) => g.numberId === "nr2" && g.campaignId === campForExclusiveClient.id), "squad exclusivo deve gerar aviso de lacuna");
 
-console.log("Bloco 25: unificação Bloqueado/Inativo, aba Arquivados, endReview, política de senha e reutilização de chips por squad validados.");
+console.log("Bloco 39: unificação Bloqueado/Inativo, aba Arquivados, endReview, política de senha e reutilização de chips por squad validados.");

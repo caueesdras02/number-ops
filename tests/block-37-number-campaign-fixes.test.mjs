@@ -65,4 +65,4 @@ campaigns2.assign("n1", camp2.id, "BACKUP");
 assert.equal(numbers2.getNumbers("", { campaignId: camp1.id }).length, 1, "deve achar o número filtrando pela 1ª campanha vinculada");
 assert.equal(numbers2.getNumbers("", { campaignId: camp2.id }).length, 1, "deve achar o número filtrando pela 2ª campanha vinculada também");
 
-console.log("Bloco 23: exclusão definitiva com vínculo encerrado, arquivar encerrando vínculos ativos e filtro multi-campanha validados.");
+console.log("Bloco 37: exclusão definitiva com vínculo encerrado, arquivar encerrando vínculos ativos e filtro multi-campanha validados.");

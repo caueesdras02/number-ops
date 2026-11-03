@@ -133,7 +133,7 @@ export class NumbersController {
   showDetail(id) {
     const number = this.service.getNumber(id);
     if (!number) return this.render();
-    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id), campaigns:this.service.state.campaigns, campaignLinks:this.campaignsService.linksFor(number.id), utilization:this.service.utilizationOf(number) });
+    this.content.innerHTML = renderNumberDetailView({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), historyEvents: this.service.history.list(number.id), incidents: this.service.state.incidents.filter((incident) => incident.numberId === number.id), campaigns:this.service.state.campaigns, campaignLinks:this.campaignsService.linksFor(number.id), utilization:this.service.utilizationOf(number), isClientNumber:this.service.isClientNamed(number) });
     const backHash = this.activeMode === "archived" ? "#numbers/archived" : this.activeMode === "client" ? "#numbers/client-numbers" : "#numbers";
     this.content.querySelector('[data-action="back-to-list"]')?.addEventListener("click", () => {
       if (window.location.hash !== backHash) window.location.hash = backHash;
@@ -150,7 +150,18 @@ export class NumbersController {
     this.content.querySelector('[data-action="archive"]')?.addEventListener('click', () => this.archive(number.id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener('click', () => this.hardDelete(number.id, true));
     this.content.querySelector('[data-action="restore"]')?.addEventListener('click', async () => { try { this.service.restore(number.id); await this.service.flush(); showToast('Número restaurado para operação.', 'success'); this.showDetail(number.id); } catch(error) { showToast(error.message,"error"); } });
+    this.content.querySelector('[data-action="toggle-client-number"]')?.addEventListener('click', () => this.setClientNumberOverride(number.id, !this.service.isClientNamed(number)));
+    this.content.querySelector('[data-action="reset-client-number"]')?.addEventListener('click', () => this.setClientNumberOverride(number.id, null));
     this.content.querySelectorAll('[data-target]').forEach((button) => button.addEventListener('click', () => { window.location.hash = button.dataset.target; }));
+  }
+
+  async setClientNumberOverride(id, value) {
+    try {
+      this.service.setClientNumberOverride(id, value);
+      await this.service.flush();
+    } catch (error) { showToast(error.message, "error"); return; }
+    showToast(value === true ? "Marcado como Número de Cliente." : value === false ? "Tirado de Números de Clientes." : "Classificação voltou a ser automática.", "success");
+    this.showDetail(id);
   }
 
   openForm(id = null, message = "") {

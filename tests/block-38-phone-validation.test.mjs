@@ -44,4 +44,4 @@ const legacyNumbers = new NumbersService(legacyRepository);
 assert.doesNotThrow(() => legacyNumbers.update("legacy1", { ...legacyNumbers.getNumber("legacy1"), notes: "atualizado" }), "editar outro campo de um número legado não deve travar por telefone já gravado");
 assert.throws(() => legacyNumbers.update("legacy1", { ...legacyNumbers.getNumber("legacy1"), phone: "5500000000000" }), /DDD inválido/, "mas trocar o telefone legado por outro inválido continua bloqueado");
 
-console.log("Bloco 24: validação de telefone brasileiro (DDD real, sem padrões óbvios de número falso) validada.");
+console.log("Bloco 38: validação de telefone brasileiro (DDD real, sem padrões óbvios de número falso) validada.");
