@@ -113,6 +113,8 @@ function showView(viewName) {
   const [view,resourceId]=viewName.split("/");
   if(view==="dashboard")controllers.dashboard.render();
   else if(view==="numbers"&&resourceId==="locations")controllers.directories.locations.render();
+  else if(view==="numbers"&&resourceId==="archived")controllers.numbers.renderArchived();
+  else if(view==="numbers"&&resourceId==="client-numbers")controllers.numbers.renderClientNumbers();
   else if(view==="numbers"&&resourceId)controllers.numbers.showDetail(resourceId);
   else if(view==="numbers")controllers.numbers.render();
   else if(view==="campaigns")resourceId?controllers.campaigns.detail(resourceId):controllers.campaigns.render();

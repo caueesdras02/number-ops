@@ -1,8 +1,10 @@
-import { NUMBER_STATUSES } from "../config/constants.js";
+import { EDITABLE_NUMBER_STATUSES, NUMBER_STATUSES } from "../config/constants.js";
 import { createSeedState } from "../data/seed-data.js";
 import { createNumber, getUtilization, UTILIZATION } from "../models/number.js";
 import { normalizePhone, now } from "../models/helpers.js";
+import { describeBrazilianPhoneError } from "../models/phone.js";
 import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete.js";
+import { matchesClientName } from "../models/client-naming.js";
 import { HistoryService } from "./history-service.js";
 
 export class NumbersService {
@@ -39,17 +41,41 @@ export class NumbersService {
     return getUtilization(number, this.hasActiveCampaignLink(number.id));
   }
 
+  /** Número "nomeado por cliente": identificação contém o nome de um Cliente cadastrado
+   * (ex.: "CHIP ZIG 03" bate com o cliente ZIG) — "Tim" nunca conta (é operadora, não
+   * cliente). Derivado, nunca armazenado: se a identificação ou o nome do cliente mudar,
+   * o número troca de aba sozinho no próximo render. */
+  isClientNamed(number) {
+    return matchesClientName(number.identification, this.state.clients);
+  }
+
+  /** Lista principal — nunca inclui arquivados (Bloqueado = sempre arquivado agora, ver
+   * archive()) nem números nomeados por cliente (ver isClientNamed / getClientNumbers),
+   * pra não bagunçar a listagem com os dois casos especiais. */
   getNumbers(query = "", filters = {}) {
+    return this.state.numbers.filter((number) => !number.archivedAt && !this.isClientNamed(number) && this.matchesNumberFilters(number, query, filters));
+  }
+
+  /** Aba "Arquivados" — só números bloqueados/arquivados, mesmos filtros de busca. */
+  getArchivedNumbers(query = "", filters = {}) {
+    return this.state.numbers.filter((number) => number.archivedAt && this.matchesNumberFilters(number, query, filters));
+  }
+
+  /** Aba "Números de Clientes" — identificação nomeada por cliente, ainda em operação
+   * (arquivado tem prioridade e fica só em Arquivados). */
+  getClientNumbers(query = "", filters = {}) {
+    return this.state.numbers.filter((number) => !number.archivedAt && this.isClientNamed(number) && this.matchesNumberFilters(number, query, filters));
+  }
+
+  matchesNumberFilters(number, query, filters) {
     const normalizedQuery = normalizePhone(query);
-    return this.state.numbers.filter((number) => {
-      const activeCampaignLink=this.state.numberCampaignLinks.find((link)=>link.numberId===number.id&&!link.endedAt);
-      const matchesQuery = !normalizedQuery || number.phone.includes(normalizedQuery);
-      const archiveFilter = filters.archiveFilter ?? "ALL";
-      const matchesArchive = archiveFilter === "ARCHIVED" ? Boolean(number.archivedAt) : archiveFilter === "ACTIVE" ? !number.archivedAt : true;
-      const matchesCampaign=!filters.campaignId||activeCampaignLink?.campaignId===filters.campaignId;
-      const matchesUtilization=!filters.utilization||this.utilizationOf(number)===filters.utilization;
-      return matchesQuery && matchesArchive && matchesCampaign && matchesUtilization && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
-    });
+    const matchesQuery = !normalizedQuery || number.phone.includes(normalizedQuery);
+    // Um número pode ter vínculo ativo com várias campanhas ao mesmo tempo — precisa checar
+    // TODOS os vínculos ativos, não só "o primeiro encontrado" (senão o filtro por campanha
+    // perdia números que estão em mais de uma campanha simultaneamente).
+    const matchesCampaign = !filters.campaignId || this.state.numberCampaignLinks.some((link) => link.numberId === number.id && !link.endedAt && link.campaignId === filters.campaignId);
+    const matchesUtilization = !filters.utilization || this.utilizationOf(number) === filters.utilization;
+    return matchesQuery && matchesCampaign && matchesUtilization && (!filters.status || number.status === filters.status) && (!filters.locationId || number.locationId === filters.locationId) && (!filters.responsibleId || number.responsibleId === filters.responsibleId) && (!filters.clientId || number.clientIds.includes(filters.clientId)) && (!filters.groupId || number.groupIds.includes(filters.groupId));
   }
 
   getNumbersFor(type, id) {
@@ -67,6 +93,9 @@ export class NumbersService {
   getGroups() { return [...this.state.groups].filter((group) => group.isActive); }
 
   create(input, { historyDescription = "Número cadastrado.", historyMetadata = {} } = {}) {
+    if (input.status !== undefined && !EDITABLE_NUMBER_STATUSES.includes(input.status)) {
+      throw new Error("Status inválido. Um número novo nunca começa Bloqueado.");
+    }
     const phone = this.validatePhone(input.phone);
     this.assertPhoneIsUnique(phone);
     const groupCount = this.validateGroupCount(input.groupCount);
@@ -80,9 +109,19 @@ export class NumbersService {
   update(id, input) {
     const existing = this.getNumber(id);
     if (!existing) throw new Error("Número não encontrado.");
-    const phone = this.validatePhone(input.phone);
+    // Só revalida o padrão do telefone (DDD/sequência/repetição) quando ele está de fato
+    // mudando — evita travar a edição de outros campos (status, localização, notas...) de
+    // um número legado cujo telefone já estava gravado antes desta checagem mais rigorosa
+    // existir.
+    const normalizedInput = normalizePhone(input.phone);
+    const phone = normalizedInput === existing.phone ? existing.phone : this.validatePhone(input.phone);
     this.assertPhoneIsUnique(phone, id);
     const groupCount = this.validateGroupCount(input.groupCount ?? existing.groupCount ?? 0);
+    // Bloqueado só é alcançado via archive() (sempre junto com archivedAt) — nunca por edição
+    // direta de status, senão reabriria o estado contraditório "bloqueado mas não arquivado".
+    if (input.status !== undefined && input.status !== existing.status && !EDITABLE_NUMBER_STATUSES.includes(input.status)) {
+      throw new Error("Status inválido. Use \"Arquivar\" para marcar como Bloqueado.");
+    }
     const updated = {
       ...existing,
       phone,
@@ -105,7 +144,16 @@ export class NumbersService {
   archive(id) {
     const existing = this.getNumber(id);
     if (!existing) throw new Error("Número não encontrado.");
-    const archived = { ...existing, status: NUMBER_STATUSES.INACTIVE, archivedAt: now(), updatedAt: now() };
+    const endedAt = now();
+    // Arquivar tira o número da operação — vínculos de campanha ativos precisam ser encerrados
+    // junto, senão o número fica "arquivado" e "em uso em campanha" ao mesmo tempo (estado
+    // contraditório). Mesmo padrão de CampaignsService.close().
+    this.state.numberCampaignLinks.filter((link) => link.numberId === id && !link.endedAt).forEach((link) => {
+      link.endedAt = endedAt;
+      link.updatedAt = endedAt;
+      this.record(id, "CAMPAIGN_LEFT", "Número saiu da campanha.", { previousValue: link.campaignId, newValue: null });
+    });
+    const archived = { ...existing, status: NUMBER_STATUSES.BLOCKED, archivedAt: endedAt, updatedAt: endedAt };
     this.state.numbers = this.state.numbers.map((number) => number.id === id ? archived : number);
     this.persist();
     this.record(id, "NUMBER_ARCHIVED", "Número arquivado.", { previousValue: { status: existing.status, archivedAt: existing.archivedAt }, newValue: { status: archived.status, archivedAt: archived.archivedAt } });
@@ -127,6 +175,14 @@ export class NumbersService {
     if (!existing) throw new Error("Número não encontrado.");
     if (existing.status === NUMBER_STATUSES.UNDER_REVIEW) return existing;
     return this.update(id, { ...existing, status: NUMBER_STATUSES.UNDER_REVIEW });
+  }
+
+  /** Contrapartida de markUnderReview() — tira o número de "Em análise" de volta pra ativo. */
+  endReview(id) {
+    const existing = this.getNumber(id);
+    if (!existing) throw new Error("Número não encontrado.");
+    if (existing.status !== NUMBER_STATUSES.UNDER_REVIEW) return existing;
+    return this.update(id, { ...existing, status: NUMBER_STATUSES.ACTIVE });
   }
 
   registerRestriction(id, input) {
@@ -197,8 +253,8 @@ export class NumbersService {
 
   validatePhone(phone) {
     const normalized = normalizePhone(phone);
-    if (!normalized) throw new Error("Informe o número de telefone.");
-    if (!normalized.startsWith("55") || (normalized.length !== 12 && normalized.length !== 13)) throw new Error("Informe um telefone brasileiro com 55, DDD e 8 ou 9 dígitos.");
+    const error = describeBrazilianPhoneError(normalized);
+    if (error) throw new Error(error);
     return normalized;
   }
 

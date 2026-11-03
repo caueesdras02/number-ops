@@ -1,3 +1,5 @@
+import { describePasswordError } from "../models/password.js";
+
 export class AuthService {
   constructor(authRepository) { this.authRepository = authRepository; }
 
@@ -37,6 +39,8 @@ export class AuthService {
    * associada ao e-mail em signup_authorizations).
    */
   async register({ name, email, password, jobTitle }) {
+    const passwordError = describePasswordError(password);
+    if (passwordError) throw new Error(passwordError);
     return this.authRepository.signUp({
       email: String(email).trim(),
       password,
@@ -60,7 +64,8 @@ export class AuthService {
   }
 
   async updatePassword(password) {
-    if (String(password ?? "").length < 8) throw new Error("A senha deve ter pelo menos 8 caracteres.");
+    const passwordError = describePasswordError(password);
+    if (passwordError) throw new Error(passwordError);
     return this.authRepository.updatePassword(password);
   }
 

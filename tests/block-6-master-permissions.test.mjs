@@ -173,7 +173,7 @@ const formHtml = renderNumberForm({ number: { id: "n1", phone: "5511999999991", 
 assert.match(formHtml, /Gerencie as campanhas vinculadas/);
 assert.doesNotMatch(formHtml, /name="campaignId"/, "vínculo de campanha não faz mais parte do formulário — é multi-campanha, gerenciado no detalhe");
 
-const listHtml = renderNumbersView([{ id: "n1", phone: "5511999999991", identification: "x", status: "ACTIVE", clientIds: [], groupIds: [], groupCount: 0, archivedAt: null }], [], [], "", "ALL", {}, [], [], true, [], [{ numberId: "n1", campaignId: "camp1", endedAt: null }]);
+const listHtml = renderNumbersView([{ id: "n1", phone: "5511999999991", identification: "x", status: "ACTIVE", clientIds: [], groupIds: [], groupCount: 0, archivedAt: null }], [], [], "", {}, [], [], true, [], [{ numberId: "n1", campaignId: "camp1", endedAt: null }]);
 assert.match(listHtml, /Utilização/);
 assert.match(listHtml, /data-filter="utilization"/);
 assert.match(listHtml, /Em uso/);

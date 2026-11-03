@@ -111,6 +111,9 @@ export class CampaignsService {
    * NÃO possuem vínculo ativo com nenhuma campanha ativa daquele cliente. Sinal de que o
    * vínculo real pode nunca ter sido criado (ex.: limitação do sistema antigo de só 1
    * vínculo ativo por número) — precisa de revisão humana, não é corrigido automaticamente.
+   * Só se aplica a clientes de squads "exclusivos" (reusesChips=false, chips dedicados por
+   * cliente): nos squads que reutilizam chips (padrão), um número associado ao cliente sem
+   * vínculo de campanha ativo no momento é normal, não é uma lacuna.
    */
   findClientCampaignGaps() {
     const activeCampaignsByClient = new Map();
@@ -119,10 +122,15 @@ export class CampaignsService {
       activeCampaignsByClient.get(campaign.clientId).push(campaign);
     });
     const clientName = (id) => this.state.clients.find((item) => item.id === id)?.name ?? "—";
+    const exclusiveClientIds = new Set(this.state.clients.filter((client) => {
+      const squad = client.squadId ? this.state.groups.find((group) => group.id === client.squadId) : null;
+      return squad && squad.reusesChips === false;
+    }).map((client) => client.id));
     const gaps = [];
     this.numbers.state.numbers.filter((number) => !number.archivedAt).forEach((number) => {
       const linkedCampaignIds = new Set(this.activeLinksFor(number.id).map((link) => link.campaignId));
       (number.clientIds ?? []).forEach((clientId) => {
+        if (!exclusiveClientIds.has(clientId)) return;
         (activeCampaignsByClient.get(clientId) ?? []).forEach((campaign) => {
           if (!linkedCampaignIds.has(campaign.id)) gaps.push({ numberId: number.id, phone: number.phone, identification: number.identification, clientId, clientName: clientName(clientId), campaignId: campaign.id, campaignName: campaign.name });
         });

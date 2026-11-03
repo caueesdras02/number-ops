@@ -1,14 +1,14 @@
 import { displayTerminology, escapeHtml } from "./number-presentation.js";
 
-const labels = { ACTIVE: "Ativo", WARMING: "Em aquecimento", UNDER_REVIEW: "Em análise", BLOCKED: "Bloqueado", INACTIVE: "Inativo", OPEN: "Aberta", RESOLVED: "Resolvida" };
-const icons = { total: "⌘", available: "✓", inuse: "◆", warming: "◌", review: "!", blocked: "×", incidents: "↗", ACTIVE: "✓", WARMING: "◌", UNDER_REVIEW: "!", BLOCKED: "×", INACTIVE: "−" };
+const labels = { ACTIVE: "Ativo", WARMING: "Em aquecimento", UNDER_REVIEW: "Em análise", BLOCKED: "Bloqueado", OPEN: "Aberta", RESOLVED: "Resolvida" };
+const icons = { total: "⌘", available: "✓", inuse: "◆", warming: "◌", review: "!", blocked: "×", incidents: "↗", ACTIVE: "✓", WARMING: "◌", UNDER_REVIEW: "!", BLOCKED: "×" };
 const date = (v) => v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem data";
 const phone = (numbers, id) => numbers.find((n) => n.id === id)?.phone || "Número não localizado";
 const empty = (title, text) => `<div class="dash-empty"><span>✓</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div></div>`;
 
 const statuses = (items) => {
   const counts = Object.fromEntries(items.map((x) => [x.label, x.count]));
-  const order = ["ACTIVE", "WARMING", "UNDER_REVIEW", "BLOCKED", "INACTIVE"];
+  const order = ["ACTIVE", "WARMING", "UNDER_REVIEW", "BLOCKED"];
   const max = Math.max(1, ...Object.values(counts));
   return order.map((key) => ({ key, count: counts[key] || 0, value: Math.round(((counts[key] || 0) / max) * 100) }));
 };

@@ -95,7 +95,7 @@ function fakeRepo(initial = []) {
 
   // Mesmo se o form values tiver squadId/access_level "grudados" (ex.: alguém manipulando o DOM
   // e injetando campos extra no FormData), register() só encaminha os campos que espera.
-  await authService.register({ name: "Fulano", email: "autorizado@empresa.com", password: "senha1234", jobTitle: "ANALYST", squadId: "s-hackeado", access_level: "MASTER" });
+  await authService.register({ name: "Fulano", email: "autorizado@empresa.com", password: "Senha1234", jobTitle: "ANALYST", squadId: "s-hackeado", access_level: "MASTER" });
   assert.equal(calls.length, 1);
   assert.deepEqual(Object.keys(calls[0].options.data).sort(), ["job_title", "name"], "squad_id e access_level nunca podem ser enviados no signUp — quem decide isso é a autorização, no banco");
   assert.ok(!("squad_id" in calls[0].options.data));

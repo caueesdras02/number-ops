@@ -29,7 +29,7 @@ const auth = new AuthService(authRepository);
 assert.equal((await auth.getActiveSession()).profile.access_level, "USER");
 assert.equal(await auth.isEmailAuthorized("pessoa@example.com"), true);
 assert.equal(await auth.isEmailAuthorized("outra@example.com"), false);
-await auth.register({ name: "Pessoa", email: "pessoa@example.com", password: "12345678", jobTitle: "ANALYST" });
+await auth.register({ name: "Pessoa", email: "pessoa@example.com", password: "Senha1234", jobTitle: "ANALYST" });
 assert.equal(calls.at(-1).options.data.access_level, undefined, "self-registration não envia nível Admin");
 assert.equal(calls.at(-1).options.data.squad_id, undefined, "self-registration não envia squad — quem define é a autorização prévia (019)");
 

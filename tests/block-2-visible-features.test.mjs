@@ -14,7 +14,7 @@ const state = {
     { id: "ca", name: "Atual", clientId: "c1", squadId: "s1", status: "ACTIVE", startedAt: "2026-01-01T00:00:00.000Z" },
     { id: "ch", name: "Anterior", clientId: "c1", squadId: "s1", status: "CLOSED", startedAt: "2025-01-01T00:00:00.000Z", endedAt: "2025-02-01T00:00:00.000Z" },
   ],
-  numbers: [{ id: "n1", phone: "5511999999999", identification: "Chip 1", status: "ACTIVE", groupCount: 12, clientIds: ["c1"], groupIds: ["s1"], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null }],
+  numbers: [{ id: "n1", phone: "5511987654213", identification: "Chip 1", status: "ACTIVE", groupCount: 12, clientIds: ["c1"], groupIds: ["s1"], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null }],
   numberCampaignLinks: [{ id: "l1", numberId: "n1", campaignId: "ca", role: "PRIMARY", startedAt: "2026-01-01T00:00:00.000Z", endedAt: null }],
   responsibles: [], locations: [], incidents: [], historyEvents: [],
 };
@@ -31,7 +31,7 @@ assert.match(clientHtml, /Atual/);
 assert.match(clientHtml, /Anterior/);
 assert.match(renderCampaignDetail({ item: state.campaigns[1], clients: state.clients, squads: state.groups, numbers: state.numbers, links: [] }), /Campanha anterior|Anterior/i);
 
-assert.match(renderNumbersView(state.numbers, [], [], "", "ALL", {}, state.clients, state.groups), /Quantidade de grupos/);
+assert.match(renderNumbersView(state.numbers, [], [], "", {}, state.clients, state.groups), /Quantidade de grupos/);
 assert.match(renderNumberForm({ number: state.numbers[0], locations: [], responsibles: [], clients: state.clients, groups: state.groups }), /name="groupCount"/);
 assert.match(renderNumberDetailView({ number: state.numbers[0], locations: [], responsibles: [], clients: state.clients, groups: state.groups, historyEvents: [], incidents: [] }), /Quantidade de grupos/);
 

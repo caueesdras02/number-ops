@@ -15,5 +15,7 @@ export function bindPageTabs(content, tabs) {
 // número (createId sempre gera "number_<uuid>").
 export const NUMBERS_SECTION_TABS = [
   { id: "numbers", label: "Todos os números", href: "#numbers" },
+  { id: "client-numbers", label: "Números de Clientes", href: "#numbers/client-numbers" },
+  { id: "archived", label: "Arquivados", href: "#numbers/archived" },
   { id: "locations", label: "Localizações", href: "#numbers/locations" },
 ];

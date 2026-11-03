@@ -21,7 +21,7 @@ export class SupabaseStateRepository {
     const squadsByNumber=groupBy(rows.number_squads,(item)=>item.number_id);
     const restrictionsByNumber=groupBy(rows.restrictions.filter((item)=>!item.ended_at),(item)=>item.number_id);
     const state={...createInitialState(),schemaVersion:SCHEMA_VERSION,meta:{seedApplied:true,source:"supabase"},
-      groups:rows.squads.map(named),
+      groups:rows.squads.map((row)=>({...named(row),reusesChips:row.reuses_chips})),
       clients:rows.clients.map((row)=>({...named(row),squadId:row.squad_id})),
       responsibles:rows.responsibles.map((row)=>({...named(row),team:row.team,squadId:row.squad_id})),
       locations:rows.locations.map((row)=>({...named(row),responsibleId:row.responsible_id})),
@@ -57,7 +57,7 @@ export class SupabaseStateRepository {
       return (nextList??[]).map(mapRow).filter((row)=>prev.get(row.id)!==JSON.stringify(row));
     };
     const upsert=async(table,rows)=>{if(!rows.length)return;check(await this.client.from(table).upsert(rows));};
-    const squadRow=(x)=>({id:x.id,name:x.name,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
+    const squadRow=(x)=>({id:x.id,name:x.name,is_active:x.isActive,reuses_chips:x.reusesChips??true,created_at:x.createdAt,updated_at:x.updatedAt});
     const clientRow=(x)=>({id:x.id,name:x.name,squad_id:x.squadId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
     const responsibleRow=(x)=>({id:x.id,name:x.name,team:x.team||"",squad_id:x.squadId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});
     const locationRow=(x)=>({id:x.id,name:x.name,responsible_id:x.responsibleId||null,is_active:x.isActive,created_at:x.createdAt,updated_at:x.updatedAt});

@@ -2,7 +2,11 @@ import { INCIDENT_STATUSES } from "../config/constants.js";
 import { createId, now } from "./helpers.js";
 function createNamedEntity(prefix, { name, isActive = true } = {}) { const timestamp = now(); return { id: createId(prefix), name: String(name ?? "").trim(), isActive, createdAt: timestamp, updatedAt: timestamp }; }
 export const createClient = (data) => ({ ...createNamedEntity("client", data), squadId: data.squadId || null });
-export const createGroup = (data) => createNamedEntity("group", data);
+// reusesChips: true (padrão) = squad reutiliza chips entre clientes, números só
+// precisam estar vinculados à campanha. false = modelo "exclusiva" (chips dedicados,
+// 3-4 por cliente) — nesse caso vale sinalizar quando um número está associado ao
+// cliente mas sem vínculo de campanha ativo (ver CampaignsService.findClientCampaignGaps).
+export const createGroup = (data) => ({ ...createNamedEntity("group", data), reusesChips: data.reusesChips === undefined ? true : Boolean(data.reusesChips) });
 export function createResponsible({ name, team = "", squadId = null, isActive = true } = {}) { return { ...createNamedEntity("responsible", { name, isActive }), team: String(team ?? "").trim(), squadId: squadId || null }; }
 export const createLocation = (data) => ({ ...createNamedEntity("location", data), responsibleId: data.responsibleId || null });
 export function createCampaign({ name, clientId = null, squadId = null, responsibleId = null, notes = "", status = "ACTIVE", stage = "CAPTACAO" } = {}) { const timestamp = now(); return { id: createId("campaign"), name: String(name ?? "").trim(), clientId: clientId || null, squadId: squadId || null, responsibleId: responsibleId || null, notes: String(notes ?? "").trim(), status, stage, startedAt: timestamp, endedAt: null, createdAt: timestamp, updatedAt: timestamp }; }

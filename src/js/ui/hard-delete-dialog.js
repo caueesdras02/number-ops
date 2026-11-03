@@ -1,11 +1,10 @@
 import { describeReferences } from "../models/hard-delete.js";
 import { escapeHtml } from "./number-presentation.js";
 
-const CONFIRM_WORD = "EXCLUIR";
-
 /**
- * Confirmação forte de exclusão definitiva. Resolve `true` só se o usuário digitar
- * a palavra de confirmação e não houver bloqueios. Resolve `false` ao cancelar.
+ * Confirmação forte de exclusão definitiva. Resolve `true` se o usuário confirmar no
+ * pop-up (e não houver bloqueios), `false` ao cancelar. Sem digitação de palavra — só
+ * um aviso claro de que o registro sai dos registros/histórico pra sempre.
  */
 export function confirmHardDelete(root, { entity, state, id, name, typeLabel }) {
   const { blockers, effects } = describeReferences(state, entity, id);
@@ -19,12 +18,11 @@ export function confirmHardDelete(root, { entity, state, id, name, typeLabel }) 
       <p class="hard-delete-target"><strong>${escapeHtml(name)}</strong></p>
       ${blocked
         ? `<div class="hard-delete-blockers"><strong>Não é possível excluir agora.</strong><p>Existem referências que impedem a exclusão:</p>${list(blockers)}<p>Arquive o registro ou remova essas referências antes.</p></div>`
-        : `<div class="hard-delete-warning"><strong>Esta ação não pode ser desfeita.</strong> O registro será apagado permanentemente do banco compartilhado.</div>
-           ${effects.length ? `<p>Consequências:</p>${list(effects)}` : ""}
-           <label class="hard-delete-confirm-label">Digite <b>${CONFIRM_WORD}</b> para confirmar<input class="input" type="text" data-hd-input autocomplete="off" autocapitalize="characters"></label>`}
+        : `<div class="hard-delete-warning"><strong>Tem certeza que deseja excluir definitivamente?</strong> O registro será retirado dos registros e do histórico, apagado permanentemente do banco compartilhado. Esta ação não pode ser desfeita.</div>
+           ${effects.length ? `<p>Também serão removidos junto:</p>${list(effects)}` : ""}`}
       <div class="form-actions">
         <button class="button button-quiet" type="button" data-hd-cancel>Cancelar</button>
-        ${blocked ? "" : `<button class="button button-danger" type="button" data-hd-confirm disabled>Excluir definitivamente</button>`}
+        ${blocked ? "" : `<button class="button button-danger" type="button" data-hd-confirm>Sim, excluir definitivamente</button>`}
       </div>
     </section></div>`;
 
@@ -37,10 +35,9 @@ export function confirmHardDelete(root, { entity, state, id, name, typeLabel }) 
     document.addEventListener("keydown", onKey);
     modal.addEventListener("click", (event) => { if (event.target === modal) done(false); });
     modal.querySelectorAll("[data-hd-cancel]").forEach((button) => button.addEventListener("click", () => done(false)));
-    const input = modal.querySelector("[data-hd-input]");
     const confirm = modal.querySelector("[data-hd-confirm]");
-    input?.addEventListener("input", () => { confirm.disabled = input.value.trim().toUpperCase() !== CONFIRM_WORD; });
-    confirm?.addEventListener("click", () => { if (!confirm.disabled) done(true); });
-    (input ?? modal.querySelector("[data-hd-cancel]"))?.focus();
+    // Desabilita no primeiro clique — impede duplo clique disparar a exclusão duas vezes.
+    confirm?.addEventListener("click", () => { if (confirm.disabled) return; confirm.disabled = true; done(true); });
+    modal.querySelector("[data-hd-cancel]")?.focus();
   });
 }

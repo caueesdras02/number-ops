@@ -10,8 +10,12 @@ export function describeReferences(state, entity, id) {
   const push = (list, count, label) => { if (count > 0) list.push({ count, label }); };
 
   if (entity === "numbers") {
-    push(blockers, arr(state, "numberCampaignLinks").filter((l) => l.numberId === id).length, "vínculo(s) de campanha");
+    // Só vínculo ATIVO bloqueia — vínculo já encerrado não deveria impedir a exclusão
+    // definitiva para sempre (arquivar já preserva o histórico; excluir definitivamente é a
+    // alternativa para apagar de vez, inclusive vínculos de campanha antigos).
+    push(blockers, arr(state, "numberCampaignLinks").filter((l) => l.numberId === id && !l.endedAt).length, "vínculo(s) de campanha ativo(s) — encerre antes de excluir");
     push(blockers, arr(state, "incidents").filter((i) => i.numberId === id).length, "ocorrência(s)");
+    push(effects, arr(state, "numberCampaignLinks").filter((l) => l.numberId === id && l.endedAt).length, "vínculo(s) de campanha encerrados serão removidos do histórico");
     push(effects, arr(state, "historyEvents").filter((h) => h.numberId === id).length, "evento(s) de histórico serão removidos");
   } else if (entity === "clients") {
     push(blockers, arr(state, "campaigns").filter((c) => c.clientId === id).length, "campanha(s)");

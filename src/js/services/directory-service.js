@@ -20,6 +20,7 @@ export class DirectoryService {
       ...(type === "responsibles" ? { team: String(input.team ?? item.team ?? "").trim(), squadId: input.squadId || null } : {}),
       ...(type === "clients" ? { squadId: input.squadId || null } : {}),
       ...(type === "locations" ? { responsibleId: input.responsibleId || null } : {}),
+      ...(type === "groups" ? { reusesChips: input.reusesChips === undefined ? item.reusesChips : input.reusesChips === "true" || input.reusesChips === true } : {}),
       updatedAt: now(),
     });
     this.numbersService.persist();

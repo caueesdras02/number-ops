@@ -14,7 +14,7 @@ const state = {
   numbers: [
     { id: "n1", phone: "5511999999991", identification: "Chip 1", status: "ACTIVE", groupCount: 1, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
     { id: "n2", phone: "5511999999992", identification: "Chip 2", status: "ACTIVE", groupCount: 1, clientIds: ["c1"], groupIds: ["s1"], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
-    { id: "n3", phone: "5511999999993", identification: "Chip 3 arquivado", status: "INACTIVE", groupCount: 0, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: "2026-01-01T00:00:00.000Z" },
+    { id: "n3", phone: "5511999999993", identification: "Chip 3 arquivado", status: "BLOCKED", groupCount: 0, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: "2026-01-01T00:00:00.000Z" },
   ],
   numberCampaignLinks: [], incidents: [], historyEvents: [], locations: [],
 };
@@ -244,7 +244,7 @@ assert.equal(submitCount, 2, "após concluir, um novo submit legítimo deve ser 
 // Estado isolado só pra este bloco — evita depender do histórico acumulado das seções anteriores.
 const gapState = {
   schemaVersion: 2, meta: { seedApplied: true },
-  groups: [{ id: "gs1", name: "Squad Gap", isActive: true }],
+  groups: [{ id: "gs1", name: "Squad Gap", isActive: true, reusesChips: false }],
   clients: [{ id: "gc1", name: "Cliente com vínculo", squadId: "gs1", isActive: true }, { id: "gc2", name: "Cliente sem vínculo", squadId: "gs1", isActive: true }],
   responsibles: [{ id: "gr1", name: "Resp", isActive: true }],
   campaigns: [], numbers: [

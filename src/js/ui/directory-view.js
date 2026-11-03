@@ -85,12 +85,15 @@ export function renderDirectoryForm(type, item = {}, groups = [], responsibles =
   const label = singular[type];
   const squadSelect = (name) => `<select class="input" name="${name}"><option value="">Sem Squad</option>${groups.map((group) => `<option value="${group.id}" ${group.id === item.squadId ? "selected" : ""}>${escapeHtml(group.name)}</option>`).join("")}</select>`;
   const responsibleSelect = (name) => `<select class="input" name="${name}"><option value="">Sem colaborador</option>${responsibles.map((responsible) => `<option value="${responsible.id}" ${responsible.id === item.responsibleId ? "selected" : ""}>${escapeHtml(responsible.name)}</option>`).join("")}</select>`;
+  const reusesChips = item.reusesChips ?? true;
   const extra = type === "responsibles"
     ? `<label>Squad<small class="form-hint">Define os clientes sob responsabilidade deste colaborador.</small>${squadSelect("squadId")}</label>`
     : type === "clients"
     ? `<label>Squad${squadSelect("squadId")}</label>`
     : type === "locations"
     ? `<label>Colaborador<small class="form-hint">Quem está com este dispositivo/localização no momento.</small>${responsibleSelect("responsibleId")}</label>`
+    : type === "groups"
+    ? `<label>Reutilização de chips<small class="form-hint">Não (modelo exclusivo, chips dedicados por cliente) mostra aviso quando um número está associado a um cliente deste Squad mas sem vínculo de campanha ativo.</small><select class="input" name="reusesChips"><option value="true" ${reusesChips ? "selected" : ""}>Sim — reutiliza chips entre clientes</option><option value="false" ${!reusesChips ? "selected" : ""}>Não — chips exclusivos por cliente</option></select></label>`
     : "";
   return `<div class="modal-backdrop" role="presentation"><form id="directory-form" class="modal-card directory-form" data-id="${item.id || ""}"><div class="modal-header"><div><p class="eyebrow">Cadastro operacional</p><h2>${item.id ? "Editar" : "Adicionar"} ${label.toLocaleLowerCase("pt-BR")}</h2></div><button type="button" class="icon-button" data-action="close-form" aria-label="Fechar formulário">×</button></div><label>Nome<input class="input" name="name" required value="${escapeHtml(item.name || "")}" autocomplete="off"></label>${extra}<div class="form-actions"><button type="button" class="button button-quiet" data-action="close-form">Cancelar</button><button class="button button-primary">Salvar ${label.toLocaleLowerCase("pt-BR")}</button></div></form></div>`;
 }

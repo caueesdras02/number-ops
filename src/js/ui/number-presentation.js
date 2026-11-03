@@ -3,7 +3,6 @@ export const statusLabels = Object.freeze({
   WARMING: "Em aquecimento",
   UNDER_REVIEW: "Em análise",
   BLOCKED: "Bloqueado",
-  INACTIVE: "Inativo",
 });
 
 export function escapeHtml(value = "") {
