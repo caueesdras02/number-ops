@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { NumbersService } from "../src/js/services/numbers-service.js";
 import { renderNumberDetailView } from "../src/js/ui/number-detail-view.js";
+import { renderNumberRows } from "../src/js/ui/numbers-view.js";
 
 const seedState = () => ({
   schemaVersion: 2, meta: { seedApplied: true },
@@ -46,4 +47,15 @@ const htmlOperational = renderNumberDetailView({ number: { ...numbers.getNumber(
 assert.match(htmlOperational, /Marcar como Número de Cliente/);
 assert.doesNotMatch(htmlOperational, /definido manualmente/);
 
-console.log("Bloco 41: override manual de Número de Cliente (forçar dentro/fora, limpar, histórico, UI) validado.");
+// View da listagem (cartões): botão "Marcar/Tirar Nº Cliente" aparece em cada linha, já
+// refletindo override manual e detecção automática.
+// n1: override=true (forçado) → já é número de cliente. n2: override=null mas identificação
+// bate com ZIG → número de cliente automaticamente. n3: nenhum dos dois → operacional comum.
+const n3 = { id: "n3", phone: "5511923456781", identification: "Chip genérico 02", status: "ACTIVE", clientNumberOverride: null };
+const clientsForRows = [{ id: "c1", name: "ZIG", squadId: null, isActive: true }];
+const rowsHtml = renderNumberRows([numbers.getNumber("n1"), numbers.getNumber("n2"), n3], [], [], clientsForRows, [], [], [], "", 0);
+assert.match(rowsHtml, /data-action="toggle-client-number" data-id="n1">Tirar de Nº Cliente/, "n1 (override true) mostra ação de tirar");
+assert.match(rowsHtml, /data-action="toggle-client-number" data-id="n2">Tirar de Nº Cliente/, "n2 (bate com ZIG, automático) mostra ação de tirar");
+assert.match(rowsHtml, /data-action="toggle-client-number" data-id="n3">Marcar Nº Cliente/, "n3 (não bate com nada) mostra ação de marcar");
+
+console.log("Bloco 41: override manual de Número de Cliente (forçar dentro/fora, limpar, histórico, UI, listagem) validado.");

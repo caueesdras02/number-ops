@@ -112,7 +112,23 @@ export class NumbersController {
       else if (action === "end-review") this.endReview(id);
       else if (action === "archive") this.archive(id);
       else if (action === "hard-delete") this.hardDelete(id);
+      else if (action === "toggle-client-number") this.toggleClientNumberFromList(id, mode);
     });
+  }
+
+  /** Marca/tira "Número de Cliente" direto do cartão da lista (sem abrir o detalhe) — mesma
+   * ação do botão na tela de detalhe, só que já re-renderiza a lista atual, já que o número
+   * pode sumir dela (foi pra outra aba) assim que a classificação muda. */
+  async toggleClientNumberFromList(id, mode) {
+    const number = this.service.getNumber(id);
+    if (!number) return;
+    const movingToClientNumbers = !this.service.isClientNamed(number);
+    try {
+      this.service.setClientNumberOverride(id, movingToClientNumbers);
+      await this.service.flush();
+    } catch (error) { showToast(error.message, "error"); return; }
+    showToast(movingToClientNumbers ? "Marcado como Número de Cliente." : "Tirado de Números de Clientes.", "success");
+    this.renderResults(mode);
   }
 
   /** Só re-renderiza os cartões da lista + a contagem (mesma renderNumberRows usada no HTML

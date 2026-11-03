@@ -1,5 +1,6 @@
 import { EDITABLE_NUMBER_STATUSES, NUMBER_STATUSES } from "../config/constants.js";
 import { getUtilization, UTILIZATION_LABELS } from "../models/number.js";
+import { matchesClientName } from "../models/client-naming.js";
 import { escapeHtml, formatPhone, nameFor, statusLabels } from "./number-presentation.js";
 
 const icons = { ACTIVE: "✓", WARMING: "◌", UNDER_REVIEW: "!", BLOCKED: "×" };
@@ -9,6 +10,14 @@ const restriction = (number) => number.restriction ? `<span class="restriction-b
 const multiCampaignWarning = (links) => links.length > 1 ? `<span class="multi-campaign-badge" title="Este número está em uso simultâneo por ${links.length} campanhas.">⚠ Em ${links.length} campanhas ao mesmo tempo</span>` : "";
 const status = (number) => `<span class="status-badge status-${number.status.toLowerCase()}"><i>${icons[number.status]}</i>${statusLabels[number.status]}</span>`;
 const activeLinksOf = (links, numberId) => (links || []).filter((link) => link.numberId === numberId && !link.endedAt);
+// Mesma lógica de NumbersService.isClientNamed() — override manual sempre vence a detecção
+// automática por texto. Duplicado aqui (em vez de injetado) porque a view não tem acesso ao
+// service, só aos dados já carregados (clients já vem como parâmetro de qualquer forma).
+const isClientNumber = (number, clients) => {
+  if (number.clientNumberOverride === true) return true;
+  if (number.clientNumberOverride === false) return false;
+  return matchesClientName(number.identification, clients);
+};
 const utilBadge = (number, links, campaigns) => {
   const util = getUtilization(number, links.length > 0);
   const names = links.map((link) => (campaigns || []).find((item) => item.id === link.campaignId)?.name).filter(Boolean);
@@ -25,7 +34,8 @@ export function renderNumberRows(numbers, locations, responsibles, clients, grou
     const reviewAction = number.status === "UNDER_REVIEW"
       ? `<button class="button button-primary" type="button" data-action="end-review" data-id="${number.id}">Voltar para ativo</button>`
       : `<button class="button button-quiet" type="button" data-action="review" data-id="${number.id}">Em análise</button>`;
-    return `<article class="number-record ${number.status === "UNDER_REVIEW" ? "is-attention" : ""}"><div class="number-record-main"><button class="number-link number-phone" type="button" data-action="view" data-id="${number.id}"><span class="record-phone">${formatPhone(number.phone)}</span><span class="record-identification">${escapeHtml(number.identification || "Sem identificação")}</span></button><div class="record-status">${status(number)}${restriction(number)}${multiCampaignWarning(links)}</div></div><div class="number-record-meta"><div><span>Localização</span><strong>${escapeHtml(nameFor(locations, number.locationId))}</strong></div><div><span>Colaborador</span><strong>${escapeHtml(nameFor(responsibles, number.responsibleId))}</strong></div><div><span>Quantidade de grupos</span><strong class="group-count-value">${Number(number.groupCount) || 0}</strong></div><div><span>Utilização</span><strong>${utilBadge(number, links, campaigns)}</strong></div><div class="record-relations"><span>Clientes</span>${chips(number.clientIds, clients, "Sem cliente")}</div><div class="record-relations"><span>Squads</span>${chips(number.groupIds, groups, "Sem squad")}</div></div><div class="record-actions">${reviewAction}<button class="button button-quiet" type="button" data-action="edit" data-id="${number.id}">Editar</button><button class="button button-danger" type="button" data-action="archive" data-id="${number.id}" data-master-only>Arquivar</button><button class="button button-danger" type="button" data-action="hard-delete" data-id="${number.id}" data-master-only>Excluir definitivamente</button></div></article>`;
+    const clientNumberAction = `<button class="button button-quiet" type="button" data-action="toggle-client-number" data-id="${number.id}">${isClientNumber(number, clients) ? "Tirar de Nº Cliente" : "Marcar Nº Cliente"}</button>`;
+    return `<article class="number-record ${number.status === "UNDER_REVIEW" ? "is-attention" : ""}"><div class="number-record-main"><button class="number-link number-phone" type="button" data-action="view" data-id="${number.id}"><span class="record-phone">${formatPhone(number.phone)}</span><span class="record-identification">${escapeHtml(number.identification || "Sem identificação")}</span></button><div class="record-status">${status(number)}${restriction(number)}${multiCampaignWarning(links)}</div></div><div class="number-record-meta"><div><span>Localização</span><strong>${escapeHtml(nameFor(locations, number.locationId))}</strong></div><div><span>Colaborador</span><strong>${escapeHtml(nameFor(responsibles, number.responsibleId))}</strong></div><div><span>Quantidade de grupos</span><strong class="group-count-value">${Number(number.groupCount) || 0}</strong></div><div><span>Utilização</span><strong>${utilBadge(number, links, campaigns)}</strong></div><div class="record-relations"><span>Clientes</span>${chips(number.clientIds, clients, "Sem cliente")}</div><div class="record-relations"><span>Squads</span>${chips(number.groupIds, groups, "Sem squad")}</div></div><div class="record-actions">${reviewAction}<button class="button button-quiet" type="button" data-action="edit" data-id="${number.id}">Editar</button>${clientNumberAction}<button class="button button-danger" type="button" data-action="archive" data-id="${number.id}" data-master-only>Arquivar</button><button class="button button-danger" type="button" data-action="hard-delete" data-id="${number.id}" data-master-only>Excluir definitivamente</button></div></article>`;
   }).join("");
   return rows || `<div class="numbers-empty"><span>⌕</span><div><h3>${escapeHtml(emptyTitle)}</h3><p>${query || activeCount ? "Ajuste sua busca ou limpe os filtros para ver outros números." : "Cadastre o primeiro número para iniciar o controle operacional."}</p></div>${activeCount ? '<button class="button button-quiet" type="button" data-action="clear-filters">Limpar filtros</button>' : '<button class="button button-primary" type="button" data-action="add">Adicionar número</button>'}</div>`;
 }
