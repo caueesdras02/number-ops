@@ -250,6 +250,7 @@ const gapState = {
   campaigns: [], numbers: [
     { id: "gn1", phone: "5511988880001", identification: "Chip Gap 1", status: "ACTIVE", groupCount: 0, clientIds: ["gc1"], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
     { id: "gn2", phone: "5511988880002", identification: "Chip Gap 2", status: "ACTIVE", groupCount: 0, clientIds: [], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
+    { id: "gn3", phone: "5511988880003", identification: "Chip Gap 3", status: "ACTIVE", groupCount: 0, clientIds: ["gc1"], groupIds: [], locationId: null, responsibleId: null, notes: "", restriction: null, archivedAt: null },
   ],
   numberCampaignLinks: [], incidents: [], historyEvents: [], locations: [],
 };
@@ -269,6 +270,22 @@ assert.ok(!gaps.some((g) => g.numberId === "gn1" && g.campaignId === campaignFor
 
 // 28) número sem esse cliente associado não gera falso positivo
 assert.ok(!gaps.some((g) => g.numberId === "gn2"), "gn2 nunca teve o cliente gc1 associado, não deve aparecer");
+
+// 28b) encerrar o vínculo de propósito (ex.: número reaproveitado pra campanhas antigas do mesmo
+// cliente) NUNCA deve fazer o gap voltar a aparecer — foi uma decisão humana já revisada, não um
+// esquecimento. Cenário real reportado: gn3 continua com gc1 em clientIds (unassign nunca mexe
+// nisso), mas o vínculo com ESSA campanha específica já foi encerrado deliberadamente. Usa gn3
+// (não gn1) pra não interferir no vínculo ativo de gn1 usado pelos testes de "Alterar função" mais abaixo.
+gapCampaigns.assign("gn3", campaignForGc1.id, "SUPPORT");
+gapCampaigns.unassign("gn3", campaignForGc1.id);
+gaps = gapCampaigns.findClientCampaignGaps();
+assert.ok(!gaps.some((g) => g.numberId === "gn3" && g.campaignId === campaignForGc1.id), "vínculo encerrado de propósito não deve reaparecer como gap da MESMA campanha");
+
+// 28c) mas uma campanha ATIVA NOVA do mesmo cliente, com a qual gn3 nunca teve vínculo nenhum
+// (nem encerrado), continua sendo um gap de verdade — a supressão é só pra combinação já revisada.
+const secondCampaignForGc1 = gapCampaigns.create({ name: "Segunda campanha do Cliente com vínculo", clientId: "gc1", squadId: "gs1", responsibleId: "gr1" });
+gaps = gapCampaigns.findClientCampaignGaps();
+assert.ok(gaps.some((g) => g.numberId === "gn3" && g.campaignId === secondCampaignForGc1.id), "campanha nova, sem histórico nenhum com gn3, continua aparecendo como gap");
 
 // 29) painel de diagnóstico só aparece quando há gaps, e some quando não há
 const campaignsListHtml = renderCampaigns({ campaigns: campaigns.list({}), clients: state.clients, squads: state.groups, responsibles: state.responsibles, filters: { query: "", status: "" }, gaps: [] });
@@ -306,4 +323,35 @@ assert.equal(gapCampaigns.linksFor("gn1").length, linksBefore + 1, "função alt
 assert.ok(gapCampaigns.linksFor("gn1").some((l) => l.role === "BACKUP" && l.endedAt), "vínculo anterior (BACKUP) permanece no histórico");
 assert.equal(gapCampaigns.state.campaigns.filter((c) => c.id === campaignForGc1.id).length, 1, "não duplica a campanha");
 
-console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, alterar função num clique, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico e proteção contra duplo submit validados.");
+// ---------------------------------------------------------------------------
+// ORDENAÇÃO: campanhas Encerradas sempre por último na listagem geral (mesmo
+// sem filtro de Situação aplicado) — nunca misturadas entre as ativas.
+// ---------------------------------------------------------------------------
+{
+  const orderState = {
+    schemaVersion: 2, meta: { seedApplied: true },
+    groups: [{ id: "os1", name: "Squad Order", isActive: true }],
+    clients: [{ id: "oc1", name: "Cliente Order", squadId: "os1", isActive: true }],
+    responsibles: [{ id: "or1", name: "Resp Order", isActive: true }],
+    campaigns: [], numbers: [], numberCampaignLinks: [], incidents: [], historyEvents: [], locations: [],
+  };
+  let orderPersisted = structuredClone(orderState);
+  const orderNumbers = new NumbersService({ initialize: () => structuredClone(orderPersisted), save: (v) => { orderPersisted = structuredClone(v); } });
+  const orderCampaigns = new CampaignsService(orderNumbers);
+  const camp1 = orderCampaigns.create({ name: "Primeira", clientId: "oc1", squadId: "os1", responsibleId: "or1" });
+  const camp2 = orderCampaigns.create({ name: "Segunda", clientId: "oc1", squadId: "os1", responsibleId: "or1" });
+  const camp3 = orderCampaigns.create({ name: "Terceira", clientId: "oc1", squadId: "os1", responsibleId: "or1" });
+  orderCampaigns.close(camp1.id); // encerra a PRIMEIRA criada — se a ordenação fosse só por criação, continuaria na frente
+  const ordered = orderCampaigns.list({});
+  assert.deepEqual(ordered.map((c) => c.id), [camp2.id, camp3.id, camp1.id], "encerrada some pro final mesmo tendo sido criada primeiro; ativas mantêm a ordem relativa entre si");
+
+  orderCampaigns.close(camp3.id);
+  const orderedTwoClosed = orderCampaigns.list({});
+  assert.deepEqual(orderedTwoClosed.map((c) => c.id), [camp2.id, camp1.id, camp3.id], "com mais de uma encerrada, a ordem relativa ENTRE as encerradas também é preservada (a que fechou primeiro continua na frente das outras encerradas)");
+
+  // filtrando só por Encerradas, a ordenação não muda nada de errado (grupo único, ordem relativa preservada)
+  const onlyClosed = orderCampaigns.list({ status: "CLOSED" });
+  assert.deepEqual(onlyClosed.map((c) => c.id), [camp1.id, camp3.id]);
+}
+
+console.log("Bloco 5: multi-campanha por número, campanha↔números com papel individual, cliente/squad derivado, alterar função num clique, dashboard sem contagem duplicada, relatório de vínculo faltando, responsável, encerrar/reativar, histórico, ordenação (encerradas por último) e proteção contra duplo submit validados.");

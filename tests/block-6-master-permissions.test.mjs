@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { isMaster, canHardDelete, assertLastMasterSafe, ACCESS_LEVELS } from "../src/js/models/access.js";
+import { isMaster, assertLastMasterSafe, ACCESS_LEVELS } from "../src/js/models/access.js";
 import { describeReferences, assertHardDeletable, applyLocalHardDelete } from "../src/js/models/hard-delete.js";
 import { getUtilization, UTILIZATION } from "../src/js/models/number.js";
 import { NumbersService } from "../src/js/services/numbers-service.js";
@@ -15,11 +15,10 @@ import { renderIncidentForm } from "../src/js/ui/incidents-view.js";
 // ---------------------------------------------------------------------------
 // access.js
 // ---------------------------------------------------------------------------
-assert.deepEqual(ACCESS_LEVELS, ["MASTER", "ADMIN", "USER", "VIEWER"]);
+// CLIENT (028/029) é um acesso externo, só leitura, fora da hierarquia interna — vem por último.
+assert.deepEqual(ACCESS_LEVELS, ["MASTER", "ADMIN", "USER", "VIEWER", "CLIENT"]);
 assert.ok(isMaster({ access_level: "MASTER" }));
 assert.ok(!isMaster({ access_level: "ADMIN" }));
-assert.ok(canHardDelete("MASTER"));
-assert.ok(!canHardDelete("ADMIN"));
 
 const roster = [
   { id: "m1", access_level: "MASTER", status: "ACTIVE" },

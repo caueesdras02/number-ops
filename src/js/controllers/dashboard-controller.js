@@ -1,9 +1,16 @@
 import { renderDashboard } from '../ui/dashboard-view.js';
+import { setPendingListFilter } from '../models/pending-list-filter.js';
 export class DashboardController {
   constructor({ service, content }) { this.service = service; this.content = content; }
   render() {
     this.content.innerHTML = renderDashboard(this.service.getData());
-    this.content.querySelectorAll('[data-target]').forEach((card) => card.addEventListener('click', () => { window.location.hash = card.dataset.target; }));
+    // Card de KPI que já vem com filtro (ver ui/dashboard-view.js) deixa o filtro pronto pra
+    // Números/Ocorrências consumirem no próximo render — nunca navega pra lista genérica quando
+    // já sabemos exatamente o que a pessoa quer ver.
+    this.content.querySelectorAll('[data-target]').forEach((card) => card.addEventListener('click', () => {
+      if (card.dataset.filter) setPendingListFilter(card.dataset.target, JSON.parse(card.dataset.filter));
+      window.location.hash = card.dataset.target;
+    }));
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const counters = this.content.querySelectorAll('[data-kpi-value]');
     const reveal = () => this.content.querySelector('.dashboard-polished')?.classList.add('is-loaded');

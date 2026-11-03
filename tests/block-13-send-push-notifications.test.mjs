@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { handleSendPushNotifications, buildNotificationPayload } from "../supabase/functions/send-push-notifications/handler.js";
+import { handleSendPushNotifications, buildNotificationPayload, buildUnregisteredNumberPayload, isEligibleForSquads } from "../supabase/functions/send-push-notifications/handler.js";
 
 // ---------------------------------------------------------------------------
 // BLOCO 13 — envio de push quando uma Ocorrência de conectividade abre.
@@ -14,7 +14,9 @@ function makeDeps({ incidents = {}, subscriptions = [], sendResult = {} } = {}) 
   return {
     deletedIds, sentTo,
     async getIncidentContext(id) { return incidents[id] ?? null; },
-    async listSubscriptions() { return subscriptions; },
+    // Cenários deste bloco são da equipe interna com acesso global: dono ADMIN por padrão. O
+    // escopo por perfil (USER/VIEWER/CLIENT) é coberto no bloco 36.
+    async listSubscriptions() { return subscriptions.map((subscription) => ({ recipient: { accessLevel: "ADMIN", squadId: null, clientId: null, active: true }, ...subscription })); },
     async sendPush(subscription, payload) {
       sentTo.push({ subscriptionId: subscription.id, payload });
       const failure = sendResult[subscription.id];
@@ -115,6 +117,89 @@ function makeRequest({ header = ENV.triggerSecret, body }) {
   assert.equal(payload.title, "Número caiu");
   assert.match(payload.body, /\+55 \(11\) 99999-9999/);
   assert.equal(payload.url, "./#incidents/i1");
+}
+
+// 8) unregisteredPhone -> envia pra todas as inscrições, SEM tentar reler nenhuma Ocorrência
+// (não existe uma: número não cadastrado nunca pode virar linha em incidents, FK NOT NULL)
+{
+  const deps = makeDeps({
+    subscriptions: [
+      { id: "sub1", endpoint: "https://push/1", p256dh: "p1", authKey: "a1" },
+      { id: "sub2", endpoint: "https://push/2", p256dh: "p2", authKey: "a2" },
+    ],
+  });
+  let contextCalled = false;
+  deps.getIncidentContext = async () => { contextCalled = true; return null; };
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { unregisteredPhone: "5511988887777" } }), deps });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.sent, 2);
+  assert.equal(contextCalled, false, "nunca tenta reler uma Ocorrência pra um telefone não cadastrado");
+  assert.equal(deps.sentTo[0].payload.title, "Número caiu — não registrado");
+  assert.match(deps.sentTo[0].payload.body, /\+55 \(11\) 98888-7777/);
+  assert.match(deps.sentTo[0].payload.body, /não está cadastrado/);
+  assert.equal(deps.sentTo[0].payload.url, "./#bot");
+}
+
+// 9) sem incidentId E sem unregisteredPhone -> 400 (comportamento de antes preservado)
+{
+  const deps = makeDeps();
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { someOtherField: true } }), deps });
+  assert.equal(result.status, 400);
+  assert.equal(result.body.reason, "missing_incident_id");
+}
+
+// 10) buildUnregisteredNumberPayload: telefone em formato inesperado não quebra o texto
+{
+  const payload = buildUnregisteredNumberPayload("");
+  assert.equal(payload.title, "Número caiu — não registrado");
+  assert.match(payload.body, /Número não identificado/);
+  assert.equal(payload.url, "./#bot");
+}
+
+// 11) isEligibleForSquads: sem preferência = tudo; sem squad no número = tudo; interseção decide
+{
+  assert.equal(isEligibleForSquads([], ["squadA"]), true, "sem preferência salva, sempre elegível");
+  assert.equal(isEligibleForSquads(undefined, ["squadA"]), true);
+  assert.equal(isEligibleForSquads(["squadA"], []), true, "número sem Squad pra filtrar, sempre elegível (não suprime alerta)");
+  assert.equal(isEligibleForSquads(["squadA"], undefined), true);
+  assert.equal(isEligibleForSquads(["squadA"], ["squadA"]), true);
+  assert.equal(isEligibleForSquads(["squadA"], ["squadB"]), false);
+  assert.equal(isEligibleForSquads(["squadA", "squadB"], ["squadB", "squadC"]), true, "qualquer interseção já elegibiliza");
+  assert.equal(isEligibleForSquads(["squadA"], ["squadB", "squadC"]), false);
+}
+
+// 12) preferência de Squad filtra quem recebe: só quem escolheu o Squad do número (ou não escolheu nenhum) recebe
+{
+  const deps = makeDeps({
+    incidents: { i1: { id: "i1", classification: "CONNECTIVITY", status: "OPEN", numberPhone: "5511999999999", numberSquadIds: ["squad-norte"] } },
+    subscriptions: [
+      { id: "sub-sem-preferencia", endpoint: "https://push/1", p256dh: "p", authKey: "a", squadIds: [] },
+      { id: "sub-squad-certo", endpoint: "https://push/2", p256dh: "p", authKey: "a", squadIds: ["squad-norte"] },
+      { id: "sub-squad-errado", endpoint: "https://push/3", p256dh: "p", authKey: "a", squadIds: ["squad-sul"] },
+    ],
+  });
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { incidentId: "i1" } }), deps });
+  assert.equal(result.body.sent, 2, "só sem-preferência e squad-certo recebem");
+  assert.deepEqual(deps.sentTo.map((s) => s.subscriptionId).sort(), ["sub-sem-preferencia", "sub-squad-certo"]);
+}
+
+// 13) número sem nenhum Squad cadastrado -> filtro de Squad não suprime ninguém (continua notificando de tudo)
+{
+  const deps = makeDeps({
+    incidents: { i1: { id: "i1", classification: "CONNECTIVITY", status: "OPEN", numberPhone: "5511999999999", numberSquadIds: [] } },
+    subscriptions: [{ id: "sub1", endpoint: "https://push/1", p256dh: "p", authKey: "a", squadIds: ["squad-norte"] }],
+  });
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { incidentId: "i1" } }), deps });
+  assert.equal(result.body.sent, 1);
+}
+
+// 14) unregisteredPhone nunca tem Squad pra filtrar -> sempre notifica de tudo, mesmo com preferências configuradas
+{
+  const deps = makeDeps({
+    subscriptions: [{ id: "sub1", endpoint: "https://push/1", p256dh: "p", authKey: "a", squadIds: ["squad-norte"] }],
+  });
+  const result = await handleSendPushNotifications({ ...makeRequest({ body: { unregisteredPhone: "5511988887777" } }), deps });
+  assert.equal(result.body.sent, 1);
 }
 
 console.log("Bloco 13 (envio de push / número caiu): todos os cenários passaram.");

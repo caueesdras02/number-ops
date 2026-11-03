@@ -78,7 +78,9 @@ function makeEvent(overrides = {}) {
   };
 }
 
-function makeService({ profile = { id: "profile-1", access_level: "USER" }, numbers = [], campaigns = [], numberCampaignLinks = [], incidents = [], events = [], externalRows = [] } = {}) {
+// ADMIN por padrão: desde o isolamento por Squad (migration 027) só MASTER/ADMIN classificam
+// números externos (memória global). Ver cenário 7b para USER.
+function makeService({ profile = { id: "profile-1", access_level: "ADMIN" }, numbers = [], campaigns = [], numberCampaignLinks = [], incidents = [], events = [], externalRows = [] } = {}) {
   const integrationEventsRepository = makeIntegrationEventsRepository(events);
   const externalNumbersRepository = makeExternalNumbersRepository(externalRows);
   const incidentsRepository = makeIncidentsRepository(incidents);
@@ -182,6 +184,15 @@ function makeService({ profile = { id: "profile-1", access_level: "USER" }, numb
   await assert.rejects(() => service.associateNumber(event.id, "num1", event), /permissão/);
   await assert.rejects(() => service.revertNotOwned("ext-1"), /permissão/);
   assert.equal(service.canModify, false);
+}
+
+// 7b) USER opera (associa número), mas não mexe na memória GLOBAL de externos
+{
+  const event = makeEvent();
+  const { service } = makeService({ profile: { id: "u1", access_level: "USER", squad_id: "s1" }, events: [{ id: event.id, processing_status: "PENDING_ASSOCIATION" }] });
+  assert.equal(service.canModify, true);
+  await assert.rejects(() => service.markNotOwned(event.id, event), /MASTER ou ADMIN/);
+  await assert.rejects(() => service.revertNotOwned("ext-1"), /MASTER ou ADMIN/);
 }
 
 // 8) +55 e formatos brasileiros equivalentes chegam à MESMA forma canônica (sem LIKE/substring)

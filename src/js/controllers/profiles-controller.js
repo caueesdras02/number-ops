@@ -1,4 +1,4 @@
-import { renderProfileForm, renderProfiles } from "../ui/profiles-view.js";
+import { filterProfiles, renderProfileForm, renderProfileRows, renderProfiles } from "../ui/profiles-view.js";
 import { renderSignupAuthorizationForm, renderSignupAuthorizations } from "../ui/signup-authorizations-view.js";
 import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../ui/number-presentation.js";
@@ -6,29 +6,67 @@ import { confirmDialog } from "../ui/confirm-dialog.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { isMaster } from "../models/access.js";
 
+/** Acesso de cliente (029): com o nível CLIENT o formulário pede o Cliente acompanhado e esconde o
+ * Squad (que não se aplica); nos outros níveis, o contrário. */
+function bindClientLevelToggle(form, levelField) {
+  const select = form?.elements[levelField];
+  if (!select) return;
+  const sync = () => {
+    const isClient = select.value === "CLIENT";
+    form.querySelector("[data-client-field]")?.toggleAttribute("hidden", !isClient);
+    form.querySelector("[data-squad-field]")?.toggleAttribute("hidden", isClient);
+  };
+  select.addEventListener("change", sync);
+  sync();
+}
+
 export class ProfilesController {
-  constructor({ service, authorizationsService = null, content, currentProfile }) { this.service = service; this.authorizationsService = authorizationsService; this.content = content; this.currentProfile = currentProfile; this.data = null; this.authorizations = null; }
+  constructor({ service, authorizationsService = null, content, currentProfile }) { this.service = service; this.authorizationsService = authorizationsService; this.content = content; this.currentProfile = currentProfile; this.data = null; this.authorizations = null; this.query = ""; }
   async render() {
     try {
       this.data = await this.service.list();
       let authorizationsHtml = "";
       if (this.authorizationsService && isMaster(this.currentProfile)) {
         this.authorizations = await this.authorizationsService.list();
-        authorizationsHtml = renderSignupAuthorizations(this.authorizations, this.data.squads);
+        authorizationsHtml = renderSignupAuthorizations(this.authorizations, this.data.squads, this.data.clients);
       }
-      this.content.innerHTML = renderProfiles({ ...this.data, currentProfile: this.currentProfile }) + authorizationsHtml;
-      this.content.querySelectorAll('[data-action="edit-profile"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
-      this.content.querySelectorAll('[data-action="hard-delete-profile"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id)));
+      this.content.innerHTML = renderProfiles({ ...this.data, currentProfile: this.currentProfile, query: this.query }) + authorizationsHtml;
+      // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
+      // o foco a cada letra) — só as linhas da tabela de usuários são atualizadas, ver renderResults().
+      this.content.querySelector('[data-action="search"]')?.addEventListener("input", (event) => { this.query = event.target.value; this.renderResults(); });
+      this.bindProfileListActions();
       this.content.querySelector('[data-action="add-authorization"]')?.addEventListener("click", () => this.openAuthorizationForm());
       this.content.querySelectorAll('[data-action="revoke-authorization"]').forEach((button) => button.addEventListener("click", () => this.revokeAuthorization(button.dataset.id)));
     } catch (error) { this.content.innerHTML = `<div class="backup-feedback" role="alert">${escapeHtml(error.message)}</div>`; }
   }
+  /** Delegado no <tbody> da tabela de Usuários (um listener só): continua funcionando depois que
+   * renderResults() troca o innerHTML das linhas a cada letra digitada. */
+  bindProfileListActions() {
+    const tbody = this.content.querySelector(".table-card tbody");
+    if (!tbody || tbody.dataset.actionsBound === "true") return;
+    tbody.dataset.actionsBound = "true";
+    tbody.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      if (button.dataset.action === "edit-profile") this.openForm(button.dataset.id);
+      else if (button.dataset.action === "hard-delete-profile") this.hardDelete(button.dataset.id);
+    });
+  }
+  /** Só re-renderiza as linhas da tabela de Usuários (mesma função usada no HTML completo, ver
+   * renderProfileRows) — busca e o restante da página (inclusive Autorizações) não mudam. */
+  renderResults() {
+    const tbody = this.content.querySelector(".table-card tbody");
+    if (!tbody || !this.data) return this.render();
+    const visible = filterProfiles(this.data.profiles, this.query);
+    tbody.innerHTML = renderProfileRows(visible, this.data.squads, this.currentProfile, this.data.clients);
+  }
   openForm(id) {
     const profile = this.data.profiles.find((item) => item.id === id);
     if (!profile) return;
-    this.content.insertAdjacentHTML("beforeend", renderProfileForm(profile, this.data.squads, this.currentProfile));
+    this.content.insertAdjacentHTML("beforeend", renderProfileForm(profile, this.data.squads, this.currentProfile, this.data.clients));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-profile-form"]').forEach((button) => button.addEventListener("click", close));
+    bindClientLevelToggle(this.content.querySelector("#profile-form"), "access_level");
     this.content.querySelector("#profile-form")?.addEventListener("submit", async (event) => {
       event.preventDefault();
       try { await this.service.update(id, Object.fromEntries(new FormData(event.currentTarget)), this.currentProfile); showToast("Usuário atualizado.", "success"); await this.render(); }
@@ -54,10 +92,11 @@ export class ProfilesController {
     } catch (error) { showToast(error.message, "error"); }
   }
   openAuthorizationForm() {
-    this.content.insertAdjacentHTML("beforeend", renderSignupAuthorizationForm(this.data.squads, isMaster(this.currentProfile)));
+    this.content.insertAdjacentHTML("beforeend", renderSignupAuthorizationForm(this.data.squads, isMaster(this.currentProfile), this.data.clients));
     const close = () => this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-authorization-form"]').forEach((button) => button.addEventListener("click", close));
     const form = this.content.querySelector("#authorization-form");
+    bindClientLevelToggle(form, "accessLevel");
     form?.addEventListener("submit", (event) => guardedSubmit(form, event, async () => {
       try {
         const values = Object.fromEntries(new FormData(form));

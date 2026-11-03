@@ -4,7 +4,40 @@ import { LocalStorageRepository } from "./local-storage-repository.js";
 import { APP_STORAGE_KEY } from "../config/constants.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const check = ({ data, error }) => { if (error) throw error; return data; };
+/**
+ * Traduz os erros do banco que o isolamento por Squad (migrations 025-027) torna esperados:
+ * - 23505 em numbers.phone: o telefone já existe, possivelmente em outro Squad (invisível pra
+ *   quem está cadastrando). Mensagem genérica — `duplicatePhone` deixa o controller desfazer o
+ *   número local que nunca foi gravado.
+ * - 42501 (RLS): registro fora do Squad do usuário (ex.: dado movido de Squad por um ADMIN
+ *   com esta aba aberta).
+ * Mantém `code` original pra quem já trata códigos (ex.: 23505 no BotService).
+ */
+export function translateDatabaseError(error) {
+  if (!error) return error;
+  const raw = `${error.message ?? ""} ${error.details ?? ""}`;
+  let translated = null;
+  if (error.code === "23505" && /numbers_phone_key|\(phone\)/i.test(raw)) {
+    translated = Object.assign(new Error("Este telefone já está cadastrado no Number Ops."), { duplicatePhone: true });
+  } else if (error.code === "42501") {
+    translated = new Error("Você não tem permissão para alterar este registro — ele pode pertencer a outro Squad. Recarregue a página para atualizar os dados.");
+  }
+  if (!translated) return error;
+  return Object.assign(translated, { code: error.code, cause: error });
+}
+const check = ({ data, error }) => { if (error) throw translateDatabaseError(error); return data; };
+// Filtro temporário: estas 4 linhas (vínculos "Apoio" de um teste em "Live do Líder") foram
+// excluídas de verdade em public.number_campaign_links (confirmado via SQL Editor: um SELECT
+// pelos ids não retorna nenhuma linha), mas o Supabase continuou devolvendo elas num fetch
+// fresco — reproduzido até em aba anônima, então não é cache de navegador nem service worker.
+// Filtra na leitura pra garantir que nunca aparecem na tela, seja qual for a causa raiz. Remover
+// esta lista (e este filtro) assim que confirmar, direto no banco, que elas não voltam mais.
+const GHOST_NUMBER_CAMPAIGN_LINK_IDS = new Set([
+  "campaign-link-958baec7-6dd1-4a74-9e2d-d658654cae6d",
+  "campaign-link-c460a781-c95f-490b-84b2-a713238b2a88",
+  "campaign-link-d7affcd0-c24c-4ba1-acf0-c2b91d123dfd",
+  "campaign-link-4acbed5e-0fcb-407e-a9c5-bc03e6c3137d",
+]);
 // Substitui Object.groupBy (indisponível em navegadores anteriores a 2024).
 const groupBy = (items, keyOf) => items.reduce((acc, item) => { const key = keyOf(item); (acc[key] ??= []).push(item); return acc; }, {});
 const camelNumber = (row, clientIds, groupIds, restriction) => ({ id:row.id,phone:row.phone,identification:row.identification,status:row.status,locationId:row.location_id,responsibleId:row.responsible_id,clientIds,groupIds,groupCount:row.group_count,notes:row.notes,restriction,archivedAt:row.archived_at,createdAt:row.created_at,updatedAt:row.updated_at });
@@ -14,7 +47,7 @@ export class SupabaseStateRepository {
   constructor(client, state) { this.client=client; this.state=clone(state); this.previous=clone(state); this.pending=Promise.resolve(); }
 
   static async create(client) {
-    const tables=["numbers","clients","squads","responsibles","locations","incidents","restrictions","history_events","campaigns","number_campaign_links","number_clients","number_squads"];
+    const tables=["numbers","clients","squads","responsibles","locations","incidents","restrictions","history_events","campaigns","number_campaign_links","number_clients","number_squads","external_number_campaign_links"];
     const values=await Promise.all(tables.map(async(table)=>[table,check(await client.from(table).select("*"))]));
     const rows=Object.fromEntries(values);
     const clientsByNumber=groupBy(rows.number_clients,(item)=>item.number_id);
@@ -27,12 +60,16 @@ export class SupabaseStateRepository {
       locations:rows.locations.map((row)=>({...named(row),responsibleId:row.responsible_id})),
       numbers:rows.numbers.map((row)=>camelNumber(row,(clientsByNumber[row.id]??[]).map((item)=>item.client_id),(squadsByNumber[row.id]??[]).map((item)=>item.squad_id),restrictionsByNumber[row.id]?.[0]?{kind:restrictionsByNumber[row.id][0].kind,description:restrictionsByNumber[row.id][0].description,recordedAt:restrictionsByNumber[row.id][0].recorded_at}:null)),
       campaigns:rows.campaigns.map((row)=>({id:row.id,name:row.name,clientId:row.client_id,squadId:row.squad_id,responsibleId:row.responsible_id,notes:row.notes,status:row.status,stage:row.stage??"CAPTACAO",startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
-      numberCampaignLinks:rows.number_campaign_links.map((row)=>({id:row.id,numberId:row.number_id,campaignId:row.campaign_id,role:row.role,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
+      numberCampaignLinks:rows.number_campaign_links.filter((row)=>!GHOST_NUMBER_CAMPAIGN_LINK_IDS.has(row.id)).map((row)=>({id:row.id,numberId:row.number_id,campaignId:row.campaign_id,role:row.role,startedAt:row.started_at,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
       // origin/classification/campaignId/integrationEventId são só LEITURA aqui (exibição) —
       // nunca entram no mapeamento de escrita (sync/incidentRow), então um upsert feito pelo
       // frontend nunca sobrescreve o que a integração (Telegram) gravou nessas colunas.
       incidents:rows.incidents.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,title:row.title,description:row.description,status:row.status,responsibleId:row.responsible_id,resolutionNotes:row.resolution_notes,resolvedById:row.resolved_by_id,resolvedAt:row.resolved_at,createdAt:row.created_at,updatedAt:row.updated_at,origin:row.origin,classification:row.classification,campaignId:row.campaign_id,integrationEventId:row.integration_event_id})),
       historyEvents:rows.history_events.map((row)=>({id:row.id,numberId:row.number_id,type:row.type,description:row.description,previousValue:row.previous_value,newValue:row.new_value,metadata:row.metadata,occurredAt:row.occurred_at})),
+      // Só LEITURA aqui — a escrita é sempre via BotService/CampaignsController usando o
+      // repositório dedicado (nunca passa por sync() abaixo), mesmo espírito de incidents
+      // escritos diretamente pela integração Telegram sem esperar o diff-sync geral.
+      externalNumberCampaignLinks:rows.external_number_campaign_links.map((row)=>({id:row.id,externalNumberId:row.external_number_id,campaignId:row.campaign_id,phoneNormalized:row.phone_normalized,companyLabel:row.company_label,clientAccountLabel:row.client_account_label,linkedBy:row.linked_by,linkedAt:row.linked_at,endedBy:row.ended_by,endedAt:row.ended_at,createdAt:row.created_at,updatedAt:row.updated_at})),
     };
     return new SupabaseStateRepository(client,state);
   }

@@ -12,5 +12,6 @@ export function createInitialState() {
     historyEvents: [],
     campaigns: [],
     numberCampaignLinks: [],
+    externalNumberCampaignLinks: [],
   };
 }

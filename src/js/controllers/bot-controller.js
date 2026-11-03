@@ -3,12 +3,17 @@ import { escapeHtml } from "../ui/number-presentation.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
+import { matchesSearch } from "../models/search-match.js";
+import { setPendingCampaignPrefill } from "../models/pending-campaign-prefill.js";
+import { updateBotNavBadge } from "../ui/bot-nav-badge.js";
 
 export class BotController {
-  constructor({ service, content }) { this.service = service; this.content = content; this.filters = {}; this.data = null; }
+  // campaignsService: só pra reaproveitar close() (mesmo fluxo oficial usado em Campanhas) na
+  // ação "Encerrar campanha antiga" — o resto deste controller continua sem depender dele.
+  constructor({ service, campaignsService = null, content }) { this.service = service; this.campaignsService = campaignsService; this.content = content; this.filters = {}; this.data = null; }
 
   async render() {
-    try { this.data = await this.service.load(); this.paint(); }
+    try { this.data = await this.service.load(); this.paint(); if (this.data.available) updateBotNavBadge(this.data.metrics.pending); }
     catch (error) { this.content.innerHTML = `<div class="backup-feedback" role="alert">${escapeHtml(error.message)}</div>`; }
   }
 
@@ -33,7 +38,14 @@ export class BotController {
     const availableNumbers = this.service.numbers.state.numbers
       .filter((number) => !number.archivedAt)
       .sort((a, b) => a.phone.localeCompare(b.phone));
-    this.content.insertAdjacentHTML("beforeend", renderBotEventDetail(event, { canModify: this.data.canModify, availableNumbers }));
+    // Só campanhas ATIVAS, com o nome do Cliente já resolvido, excluindo as que este número
+    // externo já está vinculado (evita oferecer "vincular de novo" à mesma campanha).
+    const alreadyLinkedIds = new Set((event.existingExternalLinks ?? []).map((link) => link.campaignId));
+    const availableCampaigns = this.service.numbers.state.campaigns
+      .filter((campaign) => campaign.status === "ACTIVE" && !alreadyLinkedIds.has(campaign.id))
+      .map((campaign) => ({ ...campaign, clientName: this.service.numbers.state.clients.find((client) => client.id === campaign.clientId)?.name ?? "" }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    this.content.insertAdjacentHTML("beforeend", renderBotEventDetail(event, { canModify: this.data.canModify, availableNumbers, availableCampaigns }));
     const modal = this.content.querySelector("[data-bot-modal]");
     const close = () => modal?.remove();
     modal?.querySelector('[data-action="close-bot-detail"]')?.addEventListener("click", close);
@@ -89,15 +101,22 @@ export class BotController {
       } catch (error) { showToast(error.message, "error"); }
     });
 
-    const form = modal.querySelector("[data-bot-associate-form]");
-    form?.querySelector("[data-link-search]")?.addEventListener("input", (inputEvent) => {
-      const query = inputEvent.target.value.trim().toLocaleLowerCase("pt-BR");
-      const rows = [...form.querySelectorAll("[data-relation-option]")];
-      let visible = 0;
-      rows.forEach((row) => { const matches = !query || row.textContent.toLocaleLowerCase("pt-BR").includes(query); row.hidden = !matches; if (matches) visible++; });
-      const empty = form.querySelector("[data-link-empty]");
-      if (empty) empty.hidden = visible !== 0 || rows.length === 0;
+    // Filtro de busca reaproveitado por QUALQUER form de picker no modal (associar número e
+    // vincular campanha) — cada um com seu próprio [data-link-search]/[data-relation-option].
+    modal.querySelectorAll("[data-link-search]").forEach((searchInput) => {
+      const form = searchInput.closest("form");
+      const applyFilter = () => {
+        const rows = [...form.querySelectorAll("[data-relation-option]")];
+        let visible = 0;
+        rows.forEach((row) => { const matches = matchesSearch(row.textContent, searchInput.value); row.hidden = !matches; if (matches) visible++; });
+        const empty = form.querySelector("[data-link-empty]");
+        if (empty) empty.hidden = visible !== 0 || rows.length === 0;
+      };
+      searchInput.addEventListener("input", applyFilter);
+      if (searchInput.value) applyFilter(); // busca pré-preenchida (ex.: Liveshop do alerta) já filtra ao abrir
     });
+
+    const form = modal.querySelector("[data-bot-associate-form]");
     form?.addEventListener("submit", (submitEvent) => guardedSubmit(form, submitEvent, async () => {
       const numberId = new FormData(form).get("numberId");
       if (!numberId) { showToast("Selecione um número.", "error"); return; }
@@ -108,5 +127,52 @@ export class BotController {
         await this.render();
       } catch (error) { showToast(error.message, "error"); }
     }));
+
+    const linkCampaignForm = modal.querySelector("[data-bot-link-campaign-form]");
+    linkCampaignForm?.addEventListener("submit", (submitEvent) => guardedSubmit(linkCampaignForm, submitEvent, async () => {
+      const campaignId = new FormData(linkCampaignForm).get("campaignId");
+      if (!campaignId) { showToast("Selecione uma campanha.", "error"); return; }
+      try {
+        await this.service.linkToCampaign(event.id, campaignId, event);
+        showToast("Número vinculado à campanha.", "success");
+        modal.remove();
+        await this.render();
+      } catch (error) { showToast(error.message, "error"); }
+    }));
+
+    // Leva Nome (Liveshop)/Empresa/Conta do Cliente do alerta pro form de Nova Campanha em
+    // Campanhas — nunca cria a campanha aqui, só evita redigitar o que o Telegram já mandou.
+    modal.querySelector('[data-action="bot-create-campaign"]')?.addEventListener("click", () => {
+      setPendingCampaignPrefill({
+        name: event.metadata?.liveshop || "",
+        empresa: event.metadata?.empresa || "",
+        contaCliente: event.metadata?.contaCliente || "",
+      });
+      window.location.hash = "#campaigns";
+    });
+
+    // "Campanha antiga ainda ativa?" (ver bot-view.js possibleOldCampaignBanner) — mesmo fluxo
+    // oficial de encerrar campanha já usado em Campanhas (CampaignsService.close()), só disparado
+    // a partir daqui pra não duplicar a lógica de encerrar/confirmar.
+    modal.querySelector('[data-action="bot-close-old-campaign"]')?.addEventListener("click", async (clickEvent) => {
+      if (!this.campaignsService) return;
+      const campaignId = clickEvent.currentTarget.dataset.campaignId;
+      const campaign = this.campaignsService.get(campaignId);
+      const confirmed = await confirmDialog(this.content, {
+        icon: "!",
+        title: "Encerrar esta campanha?",
+        bodyHtml: `<p>Os vínculos ativos com números serão encerrados e o histórico será preservado.</p>`,
+        confirmLabel: "Encerrar campanha",
+        tone: "danger",
+      });
+      if (!confirmed) return;
+      try {
+        this.campaignsService.close(campaignId);
+        await this.campaignsService.flush();
+        showToast(`Campanha "${campaign?.name ?? ""}" encerrada.`, "warning");
+        modal.remove();
+        await this.render();
+      } catch (error) { showToast(error.message, "error"); }
+    });
   }
 }

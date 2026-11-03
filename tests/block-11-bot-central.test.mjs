@@ -125,4 +125,43 @@ const fakeNumbersService = (state) => ({ state });
   assert.match(html, /data-action="open-number"/, "com número resolvido, oferece navegação para ele");
 }
 
+// 8) Empresa/Liveshop/Conta do Cliente do alerta Telegram aparecem mesmo sem número/campanha
+//    cadastrados aqui (evento IGNORED_NOT_OWNED ou PENDING_ASSOCIATION) — esse dado já vem no
+//    texto do alerta e não pode "sumir" só porque não houve vínculo formal ainda. Coluna Número
+//    usa o MESMO texto "Não encontrado" pra IGNORED_NOT_OWNED e PENDING_ASSOCIATION (a distinção
+//    real já está na coluna Status — não repete com textos diferentes), e a coluna Campanha
+//    mostra o nome do Liveshop puro, sem prefixo "Liveshop:".
+{
+  const notOwnedEvent = {
+    id: "e1", eventType: "CONNECTIVITY_ALERT", processingStatus: "IGNORED_NOT_OWNED", phoneNormalized: "5581914101890",
+    number: null, campaign: null, incident: null, linkedIncidentId: null, campaignId: null, numberId: null, externalRecord: null,
+    metadata: { empresa: "Zig Online", liveshop: "Mega Feirão de fábrica", contaCliente: "Dhenny novo" },
+    receivedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const tableHtml = renderBotCentral({ available: true, events: [notOwnedEvent], metrics: { total: 1, matched: 0, pending: 0, openConnectivity: 0, lastEvent: notOwnedEvent }, filters: {} });
+  assert.match(tableHtml, /Não encontrado — Conta do Cliente: Dhenny novo/, "coluna Número: rótulo único + conta do cliente, sem duplicar a distinção da coluna Status");
+  assert.match(tableHtml, />Mega Feirão de fábrica</, "coluna Campanha mostra só o nome do Liveshop, sem o prefixo \"Liveshop:\"");
+  assert.doesNotMatch(tableHtml, /Liveshop: /, "nunca mais mostra o prefixo \"Liveshop:\" na tabela");
+
+  const pendingEvent = { ...notOwnedEvent, id: "e2", processingStatus: "PENDING_ASSOCIATION" };
+  const pendingHtml = renderBotCentral({ available: true, events: [pendingEvent], metrics: { total: 1, matched: 0, pending: 1, openConnectivity: 0, lastEvent: pendingEvent }, filters: {} });
+  assert.match(pendingHtml, /Não encontrado — Conta do Cliente: Dhenny novo/, "mesmo texto pra PENDING_ASSOCIATION — padronizado com IGNORED_NOT_OWNED");
+
+  const detailHtml = renderBotEventDetail(notOwnedEvent, { canModify: true, availableNumbers: [] });
+  assert.match(detailHtml, /Zig Online/, "empresa aparece no detalhe do evento");
+  assert.match(detailHtml, /Mega Feirão de fábrica/);
+  assert.match(detailHtml, /Dhenny novo/);
+
+  // Já vinculado (existingExternalLinks) — coluna Campanha na TABELA vira link de verdade pra
+  // campanha (mesmo estilo de uma campanha nossa já associada), não mais o texto cru do alerta.
+  // Antes disso a tabela nunca dava nenhum sinal visual de que o vínculo já tinha sido feito.
+  const linkedEvent = { ...notOwnedEvent, id: "e3", existingExternalLinks: [{ campaignId: "camp1", campaignName: "Mega Feirão de fábrica", clientName: "Zig Online" }] };
+  const linkedHtml = renderBotCentral({ available: true, events: [linkedEvent], metrics: { total: 1, matched: 0, pending: 0, openConnectivity: 0, lastEvent: linkedEvent }, filters: {} });
+  assert.match(linkedHtml, /data-action="open-campaign" data-id="camp1">Mega Feirão de fábrica</, "vinculado: campanha aparece como link clicável, não como texto cru sem vínculo");
+  assert.doesNotMatch(linkedHtml, /<span class="table-secondary">Mega Feirão de fábrica<\/span>/, "não mostra mais o texto cru do alerta depois de vinculado");
+
+  const withoutMetadata = { ...notOwnedEvent, id: "e2", metadata: {} };
+  assert.doesNotMatch(renderBotEventDetail(withoutMetadata), /bot-alertinfo-list/, "sem dado do alerta, não renderiza o bloco à toa");
+}
+
 console.log("Central Number Ops Bot (leitura, dashboard, badge de origem): todos os cenários passaram.");

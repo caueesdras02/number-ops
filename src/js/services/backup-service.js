@@ -10,6 +10,11 @@ const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key
 
 export class BackupService {
   constructor(numbersService) { this.numbersService = numbersService; }
+  /** true quando os dados vêm do Supabase (produção, compartilhado pela equipe) — false no modo
+   * local/offline (sem Supabase configurado, cada navegador com sua própria cópia). Usado só pra
+   * deixar o texto da tela certo sobre o alcance real de exportar/restaurar — nunca muda o que a
+   * ação em si faz. */
+  get isSharedBackend() { return this.numbersService.state?.meta?.source === 'supabase'; }
   createExport() {
     const today = new Date().toISOString().slice(0, 10);
     const backup = { kind: 'number-ops-backup', formatVersion: BACKUP_FORMAT_VERSION, exportedAt: new Date().toISOString(), schemaVersion: SCHEMA_VERSION, state: clone(this.numbersService.state) };

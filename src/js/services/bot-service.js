@@ -19,9 +19,10 @@
 // acontece no backend (supabase/functions/telegram-webhook/handler.js) —
 // este serviço só lê/grava a memória, não reprocessa eventos passados
 // automaticamente.
-import { canOperate } from "../models/access.js";
+import { canOperate, hasGlobalScope } from "../models/access.js";
 import { canonicalBrazilianPhone } from "../models/phone.js";
 import { createId, now } from "../models/helpers.js";
+import { normalizeSearchText } from "../models/search-match.js";
 
 export const PROCESSING_STATUS_LABELS = Object.freeze({
   RECEIVED: "Recebido",
@@ -85,11 +86,12 @@ export class BotService {
    *   currentProfile?: object|null,
    * }} params
    */
-  constructor({ integrationEventsRepository, externalNumbersRepository = null, incidentsRepository = null, historyEventsRepository = null, numbersService, currentProfile = null }) {
+  constructor({ integrationEventsRepository, externalNumbersRepository = null, incidentsRepository = null, historyEventsRepository = null, externalNumberCampaignLinksRepository = null, numbersService, currentProfile = null }) {
     this.repository = integrationEventsRepository;
     this.externalNumbersRepository = externalNumbersRepository;
     this.incidentsRepository = incidentsRepository;
     this.historyEventsRepository = historyEventsRepository;
+    this.externalNumberCampaignLinksRepository = externalNumberCampaignLinksRepository;
     this.numbers = numbersService;
     this.currentProfile = currentProfile;
     this.externalNumbers = [];
@@ -103,6 +105,12 @@ export class BotService {
 
   assertCanModify() {
     if (!this.canModify) throw new Error("Você não tem permissão para realizar esta ação.");
+  }
+
+  /** A memória de números externos é GLOBAL (afeta a ingestão de alertas de todos os Squads) —
+   * só MASTER/ADMIN classificam/revertem (mesma regra do RLS, migration 027). */
+  assertCanManageExternalNumbers() {
+    if (!hasGlobalScope(this.currentProfile)) throw new Error("Somente MASTER ou ADMIN podem classificar números como não pertencentes à operação.");
   }
 
   async load() {
@@ -124,7 +132,51 @@ export class BotService {
     const incident = event.linkedIncidentId ? state.incidents.find((item) => item.id === event.linkedIncidentId) ?? null : null;
     const externalNumberId = event.metadata?.notOwned?.externalNumberId ?? null;
     const externalRecord = externalNumberId ? this.externalNumbers.find((item) => item.id === externalNumberId) ?? null : null;
-    return { ...event, number, campaign, client, incident, externalRecord };
+    // Campanhas às quais este número externo JÁ está vinculado (ver linkToCampaign) — resolvidas
+    // com nome de campanha/cliente pra UI mostrar "já vinculado a X" sem lookup manual.
+    const existingExternalLinks = externalNumberId
+      ? (state.externalNumberCampaignLinks ?? [])
+          .filter((link) => link.externalNumberId === externalNumberId && !link.endedAt)
+          .map((link) => {
+            const linkCampaign = state.campaigns.find((item) => item.id === link.campaignId) ?? null;
+            const linkClient = linkCampaign ? state.clients.find((item) => item.id === linkCampaign.clientId) ?? null : null;
+            return { ...link, campaignName: linkCampaign?.name ?? null, clientName: linkClient?.name ?? null };
+          })
+      : [];
+    // Só pra número que não é nosso (IGNORED_NOT_OWNED) — nunca mexe na classificação automática
+    // de números já nossos. Ver findPossibleOldCampaign.
+    const possibleOldCampaign = event.processingStatus === "IGNORED_NOT_OWNED" ? this.findPossibleOldCampaign(event) : null;
+    return { ...event, number, campaign, client, incident, externalRecord, existingExternalLinks, possibleOldCampaign };
+  }
+
+  /**
+   * Sinal de que a operação pode ter migrado pra uma campanha nova sem encerrar a antiga: a
+   * Empresa do alerta bate (nome exato, sem acento/maiúscula) com um Cliente já cadastrado, e
+   * esse Cliente já tem uma Campanha ATIVA com nome DIFERENTE do Liveshop deste alerta. Puramente
+   * um diagnóstico de LEITURA — quem decide encerrar a campanha antiga é sempre a pessoa (ver
+   * data-action="bot-close-old-campaign" em bot-controller.js, que reaproveita
+   * CampaignsService.close(), o mesmo fluxo oficial usado em Campanhas).
+   */
+  findPossibleOldCampaign(event) {
+    const empresa = event.metadata?.empresa;
+    const liveshop = event.metadata?.liveshop;
+    if (!empresa || !liveshop) return null;
+    const state = this.numbers.state;
+    const client = state.clients.find((item) => item.isActive && normalizeSearchText(item.name) === normalizeSearchText(empresa));
+    if (!client) return null;
+    const oldCampaign = state.campaigns.find((campaign) => campaign.status === "ACTIVE" && campaign.clientId === client.id && normalizeSearchText(campaign.name) !== normalizeSearchText(liveshop));
+    if (!oldCampaign) return null;
+    return { campaignId: oldCampaign.id, campaignName: oldCampaign.name, clientId: client.id, clientName: client.name };
+  }
+
+  /** Alertas aguardando ação ("Sem número associado") — alimenta o contador do menu lateral sem
+   * precisar carregar a Central inteira. Usa só a contagem (count/head) quando o repositório
+   * suporta; senão cai pro list(). Sem repositório (modo local) não há alertas: 0. */
+  async pendingCount() {
+    if (!this.repository) return 0;
+    if (typeof this.repository.count === "function") return this.repository.count({ processing_status: "PENDING_ASSOCIATION" });
+    const rows = await this.repository.list();
+    return rows.filter((row) => row.processing_status === "PENDING_ASSOCIATION").length;
   }
 
   emptyMetrics() { return { total: 0, matched: 0, pending: 0, notOwned: 0, openConnectivity: this.openConnectivityCount() }; }
@@ -160,6 +212,7 @@ export class BotService {
    */
   async markNotOwned(eventId, event) {
     this.assertCanModify();
+    this.assertCanManageExternalNumbers();
     if (!this.externalNumbersRepository) throw new Error("Memória de números externos não disponível.");
     if (event.processingStatus !== "PENDING_ASSOCIATION") throw new Error("Este evento não está pendente de associação.");
     const canonicalPhone = canonicalBrazilianPhone(event.phoneNormalized);
@@ -199,11 +252,66 @@ export class BotService {
    * Alertas futuros desse telefone voltam a poder virar PENDING_ASSOCIATION normalmente. */
   async revertNotOwned(externalNumberId) {
     this.assertCanModify();
+    this.assertCanManageExternalNumbers();
     if (!this.externalNumbersRepository) throw new Error("Memória de números externos não disponível.");
     await this.externalNumbersRepository.update(externalNumberId, {
       reverted_at: now(),
       reverted_by: this.currentProfile?.id ?? null,
     });
+  }
+
+  /**
+   * Vincula um número JÁ classificado como externo (IGNORED_NOT_OWNED) a uma Campanha JÁ
+   * EXISTENTE — nunca cria Campanha, nunca cria um registro em `numbers`. Cliente/Squad são
+   * sempre derivados da Campanha escolhida, nunca gravados aqui. Telefone/empresa/conta do
+   * cliente vêm do próprio evento (o texto do alerta do Telegram), desnormalizados na linha do
+   * vínculo — mesma regra de dedupe por corrida das outras ações deste serviço (23505 -> relê e
+   * reaproveita, nunca duplica).
+   */
+  async linkToCampaign(eventId, campaignId, event) {
+    this.assertCanModify();
+    if (!this.externalNumberCampaignLinksRepository) throw new Error("Vínculo de campanha para números externos não disponível.");
+    if (event.processingStatus !== "IGNORED_NOT_OWNED") throw new Error("Este evento não está classificado como não pertencente à operação.");
+    const externalNumberId = event.metadata?.notOwned?.externalNumberId;
+    if (!externalNumberId) throw new Error("Número externo não identificado — reclassifique o evento antes de vincular.");
+    const campaign = this.numbers.state.campaigns.find((item) => item.id === campaignId);
+    if (!campaign) throw new Error("Selecione uma campanha já cadastrada.");
+
+    const record = {
+      id: createId("external_campaign_link"),
+      external_number_id: externalNumberId,
+      campaign_id: campaignId,
+      phone_normalized: event.phoneNormalized,
+      company_label: event.metadata?.empresa || null,
+      client_account_label: event.metadata?.contaCliente || null,
+      linked_by: this.currentProfile?.id ?? null,
+    };
+    let inserted;
+    try {
+      inserted = await this.externalNumberCampaignLinksRepository.upsert(record);
+    } catch (error) {
+      if (error?.code === "23505") {
+        // Já vinculado a esta mesma campanha (outra aba/ação ou reenvio) — reaproveita, nunca duplica.
+        const all = await this.externalNumberCampaignLinksRepository.list();
+        const existing = all.find((row) => row.external_number_id === externalNumberId && row.campaign_id === campaignId && !row.ended_at);
+        if (!existing) throw new Error("Conflito ao vincular a campanha — tente novamente.");
+        inserted = existing;
+      } else {
+        throw new Error("Falha ao vincular a campanha.");
+      }
+    }
+
+    const mapped = {
+      id: inserted.id, externalNumberId: inserted.external_number_id, campaignId: inserted.campaign_id,
+      phoneNormalized: inserted.phone_normalized, companyLabel: inserted.company_label, clientAccountLabel: inserted.client_account_label,
+      linkedBy: inserted.linked_by, linkedAt: inserted.linked_at, endedBy: inserted.ended_by, endedAt: inserted.ended_at,
+      createdAt: inserted.created_at, updatedAt: inserted.updated_at,
+    };
+    // Reflete imediatamente no estado local, sem esperar reload — mesma lógica de
+    // linkOrCreateIncident (a escrita já foi feita direto no Supabase acima).
+    if (!this.numbers.state.externalNumberCampaignLinks.some((link) => link.id === mapped.id)) {
+      this.numbers.state.externalNumberCampaignLinks.push(mapped);
+    }
   }
 
   /**

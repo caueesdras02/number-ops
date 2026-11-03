@@ -8,7 +8,7 @@ const tables={
   squads:[{id:"s1",name:"Squad",is_active:true,created_at:timestamp,updated_at:timestamp}],
   responsibles:[{id:"r1",name:"Pessoa",team:"Operação",is_active:true,created_at:timestamp,updated_at:timestamp}],
   locations:[{id:"loc1",name:"Celular",is_active:true,created_at:timestamp,updated_at:timestamp}],
-  incidents:[],restrictions:[],history_events:[],campaigns:[],number_campaign_links:[],
+  incidents:[],restrictions:[],history_events:[],campaigns:[],number_campaign_links:[],external_number_campaign_links:[],
   number_clients:[{number_id:"n1",client_id:"c1"}],number_squads:[{number_id:"n1",squad_id:"s1"}],
 };
 tables.responsibles[0].squad_id="s1";

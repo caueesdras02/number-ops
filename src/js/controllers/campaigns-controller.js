@@ -1,12 +1,14 @@
-import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaigns, renderChangeRoleForm, stageMenuItemsFor } from "../ui/campaigns-view.js";
+import { renderCampaignDetail, renderCampaignForm, renderCampaignLinkAddForm, renderCampaignRows, renderCampaigns, renderChangeRoleForm, stageMenuItemsFor } from "../ui/campaigns-view.js";
 import { openStageMenu, closeActiveStageMenu, isStageMenuOpenFor } from "../ui/stage-dropdown.js";
 import { showToast } from "../ui/toast.js";
 import { guardedSubmit } from "../ui/form-submit-guard.js";
 import { confirmHardDelete } from "../ui/hard-delete-dialog.js";
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { canOperate } from "../models/access.js";
+import { matchesSearch, normalizeSearchText } from "../models/search-match.js";
+import { takePendingCampaignPrefill } from "../models/pending-campaign-prefill.js";
 export class CampaignsController {
-  constructor({ service, content, currentProfile = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; }
+  constructor({ service, content, currentProfile = null, externalLinksRepository = null }) { this.service=service; this.content=content; this.filters={query:"",status:"",stage:""}; this.currentProfile=currentProfile; this.externalLinksRepository=externalLinksRepository; }
   // Diálogos reaproveitados nos 2-3 pontos que disparam a mesma ação (lista, detalhe, seletor de
   // Situação) — um só lugar pra manter o texto, nunca duplicado por cópia-e-cola.
   confirmCloseCampaign() {
@@ -52,21 +54,72 @@ export class CampaignsController {
     const state=this.service.state;
     this.content.innerHTML=renderCampaigns({campaigns:this.service.list(this.filters),clients:state.clients,squads:state.groups,responsibles:state.responsibles,filters:this.filters,gaps:this.service.findClientCampaignGaps(),canEdit:this.canEdit});
     this.content.querySelector('[data-action="add"]')?.addEventListener("click",()=>this.openForm());
-    this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.render();});
+    // Digitar não repinta a página inteira (isso destruiria e recriaria este <input>, derrubando
+    // o foco a cada letra) — só as linhas da tabela são atualizadas, ver renderResults().
+    this.content.querySelector('[data-action="search"]')?.addEventListener("input",(event)=>{this.filters.query=event.target.value;this.renderResults();});
     this.content.querySelector('[data-action="situacao-filter"]')?.addEventListener("change",(event)=>{this.applySituacaoFilter(event.target.value);this.render();});
-    this.bindStageTriggers();
-    this.content.querySelectorAll('[data-action="view"]').forEach((button)=>button.addEventListener("click",()=>this.detail(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="edit"]').forEach((button)=>button.addEventListener("click",()=>this.openForm(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button)=>button.addEventListener("click",()=>this.hardDelete(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;}));
-    this.content.querySelectorAll('[data-action="close"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!(await this.confirmCloseCampaign()))return;
-      try{this.service.close(button.dataset.id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
-    }));
-    this.content.querySelectorAll('[data-action="reactivate"]').forEach((button)=>button.addEventListener("click",async()=>{
-      if(!(await this.confirmReactivateCampaign()))return;
-      try{this.service.reactivate(button.dataset.id);await this.service.flush();showToast("Campanha reativada.","success");this.render();}catch(error){showToast(error.message,"error");}
-    }));
+    this.content.querySelectorAll('[data-action="open-number"]').forEach((button)=>button.addEventListener("click",()=>{window.location.hash=`#numbers/${button.dataset.id}`;})); // linhas do relatório de vínculos faltando (gap-report), não muda com a busca
+    this.bindListActions();
+    // Veio da Central Number Ops Bot ("Campanha ainda não existe? Criar nova"). take() consome e
+    // limpa: só age nesta primeira renderização depois do clique, nunca de novo num render()
+    // seguinte não relacionado. Antes de abrir o form de criação, verifica se já existe uma
+    // campanha ATIVA com nome parecido (mesma comparação — acento/maiúscula/espaço insensível —
+    // já usada pra pré-filtrar o seletor de "Vincular à campanha") — se existir, nunca abre
+    // "Nova campanha": leva direto pro detalhe da campanha já existente, evitando duplicidade.
+    const prefill=takePendingCampaignPrefill();
+    if(prefill){
+      const similar=prefill.name?state.campaigns.find((campaign)=>campaign.status==="ACTIVE"&&matchesSearch(campaign.name,prefill.name)):null;
+      if(similar){
+        showToast(`Já existe uma campanha parecida: "${similar.name}". Vá no evento na Central Number Ops Bot e use "Vincular à campanha" pra associar este número a ela.`,"info",7000);
+        this.detail(similar.id);
+      }else{
+        this.openForm(null,{prefill});
+      }
+    }
+  }
+  /** Delegado no <tbody> (um listener só, não um por botão/linha): continua funcionando depois
+   * que renderResults() troca o innerHTML das linhas a cada busca, sem precisar religar nada.
+   * Cobre também o gatilho de Etapa (stage-open), que também vive dentro de cada linha. */
+  bindListActions() {
+    const tbody=this.content.querySelector(".table-card tbody");
+    if(!tbody||tbody.dataset.actionsBound==="true")return;
+    tbody.dataset.actionsBound="true";
+    tbody.addEventListener("click",async(event)=>{
+      const stageTrigger=event.target.closest('[data-action="stage-open"]');
+      if(stageTrigger){
+        if(isStageMenuOpenFor(stageTrigger)){closeActiveStageMenu();return;}
+        const id=stageTrigger.dataset.id;
+        const item=this.service.get(id);
+        if(!item)return;
+        openStageMenu(stageTrigger,{items:stageMenuItemsFor(item.status),current:item.stage,onSelect:(value)=>this.handleStageSelect(id,value,false)});
+        return;
+      }
+      const button=event.target.closest("[data-action]");
+      if(!button)return;
+      const id=button.dataset.id;
+      const action=button.dataset.action;
+      if(action==="view")this.detail(id);
+      else if(action==="edit")this.openForm(id);
+      else if(action==="hard-delete")this.hardDelete(id);
+      else if(action==="close"){
+        if(!(await this.confirmCloseCampaign()))return;
+        try{this.service.close(id);await this.service.flush();showToast("Campanha encerrada.","warning");this.render();}catch(error){showToast(error.message,"error");}
+      }else if(action==="reactivate"){
+        if(!(await this.confirmReactivateCampaign()))return;
+        try{this.service.reactivate(id);await this.service.flush();showToast("Campanha reativada.","success");this.render();}catch(error){showToast(error.message,"error");}
+      }
+    });
+  }
+  /** Só re-renderiza as linhas da tabela (mesma função usada no HTML completo, ver
+   * renderCampaignRows) — busca, filtro de Situação e o resto da página não mudam. */
+  renderResults() {
+    const tbody=this.content.querySelector(".table-card tbody");
+    if(!tbody)return this.render();
+    const state=this.service.state;
+    tbody.innerHTML=renderCampaignRows(this.service.list(this.filters),state.clients,state.groups,state.responsibles,this.canEdit);
+    // Recalcula o fade de scroll horizontal da tabela (table-scroll-hint.js já escuta 'scroll' no
+    // .table-scroll) — sem isso, o fade ficaria desatualizado depois que a busca muda a largura útil.
+    this.content.querySelector(".table-scroll")?.dispatchEvent(new Event("scroll"));
   }
   /** Etapa operacional: abre o popover customizado (ui/stage-dropdown.js) com as opções da
    * campanha ACTIVE (Captação / Tá rolando·Pós live / Encerrada). Mesmo widget na listagem e no
@@ -107,8 +160,9 @@ export class CampaignsController {
   }
   detail(id) {
     const item=this.service.get(id);if(!item)return this.render();const state=this.service.state;
-    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||"")),canEdit:this.canEdit});
+    this.content.innerHTML=renderCampaignDetail({item,clients:state.clients,squads:state.groups,responsibles:state.responsibles,numbers:state.numbers,locations:state.locations,allLinks:state.numberCampaignLinks,links:state.numberCampaignLinks.filter((link)=>link.campaignId===id).sort((a,b)=>(b.startedAt||"").localeCompare(a.startedAt||"")),externalLinks:(state.externalNumberCampaignLinks??[]).filter((link)=>link.campaignId===id).sort((a,b)=>(b.linkedAt||"").localeCompare(a.linkedAt||"")),canEdit:this.canEdit});
     this.bindStageTriggers();
+    this.content.querySelectorAll('[data-action="end-external-link"]').forEach((button)=>button.addEventListener("click",()=>this.endExternalLink(button.dataset.id,id)));
     this.content.querySelector('[data-action="back"]')?.addEventListener("click",()=>{if(window.location.hash!=="#campaigns")window.location.hash="#campaigns";else this.render();});
     this.content.querySelector('[data-action="add-links"]')?.addEventListener("click",()=>this.openLinkForm(id));
     this.content.querySelector('[data-action="hard-delete"]')?.addEventListener("click",()=>this.hardDelete(id,true));
@@ -125,6 +179,21 @@ export class CampaignsController {
       try{this.service.unassign(button.dataset.numberId,id);await this.service.flush();showToast("Vínculo encerrado.","warning");this.detail(id);}catch(error){showToast(error.message,"error");}
     }));
     this.content.querySelectorAll('[data-action="change-role"]').forEach((button)=>button.addEventListener("click",()=>this.openChangeRoleForm(id,button.dataset.numberId,button.dataset.role)));
+  }
+  /** Encerra o vínculo de um número EXTERNO (de cliente, não nosso — ver BotService.linkToCampaign)
+   * com esta campanha. Mesmo diálogo de confirmação e mesmo espírito do "Encerrar" de vínculo real
+   * (histórico preservado, nunca apaga a linha), mas escreve direto no repositório dedicado — este
+   * recurso nunca passa pelo diff-sync geral do CampaignsService, ver plano/decisão de arquitetura. */
+  async endExternalLink(linkId,campaignId) {
+    if(!this.externalLinksRepository)return;
+    if(!(await this.confirmEndLink()))return;
+    try{
+      await this.externalLinksRepository.update(linkId,{ended_at:new Date().toISOString(),ended_by:this.currentProfile?.id??null});
+      const link=this.service.state.externalNumberCampaignLinks?.find((item)=>item.id===linkId);
+      if(link)link.endedAt=new Date().toISOString();
+      showToast("Vínculo encerrado.","warning");
+      this.detail(campaignId);
+    }catch(error){showToast(error.message,"error");}
   }
   openChangeRoleForm(campaignId,numberId,currentRole) {
     const campaign=this.service.get(campaignId);const number=this.service.state.numbers.find((item)=>item.id===numberId);
@@ -155,9 +224,19 @@ export class CampaignsController {
       if(fromDetail)window.location.hash="#campaigns";else this.render();
     }catch(error){showToast(error.message,"error");}
   }
-  openForm(id=null) {
+  openForm(id=null,{prefill=null}={}) {
     const state=this.service.state;
-    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item:id?this.service.get(id):{},clients:state.clients.filter((item)=>item.isActive),squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive),numbers:state.numbers,links:id?this.service.activeLinksForCampaign(id):[]}));
+    const activeClients=state.clients.filter((item)=>item.isActive);
+    let item=id?this.service.get(id):{};
+    if(!id&&prefill){
+      // Empresa do alerta bate com o NOME de um Cliente já ativo (comparação exata, sem
+      // acento/maiúscula) -> pré-seleciona (Squad já deriva sozinho, ver syncSquadFromClient
+      // abaixo). Sem bater, o formulário mostra o texto do alerta como dica pra buscar manualmente
+      // — nunca cria Cliente novo aqui, mesma regra de nunca criar Campanha sozinho.
+      const matchedClient=prefill.empresa?activeClients.find((client)=>normalizeSearchText(client.name)===normalizeSearchText(prefill.empresa)):null;
+      item={name:prefill.name||"",clientId:matchedClient?.id||""};
+    }
+    this.content.insertAdjacentHTML("beforeend",renderCampaignForm({item,clients:activeClients,squads:state.groups.filter((item)=>item.isActive),responsibles:state.responsibles.filter((item)=>item.isActive),numbers:state.numbers,links:id?this.service.activeLinksForCampaign(id):[],prefillHint:id?null:prefill}));
     const close=()=>this.content.querySelector(".modal-backdrop")?.remove();
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     this.content.querySelector('[data-action="add-links-inline"]')?.addEventListener("click",()=>{close();this.openLinkForm(id,{onDone:()=>this.openForm(id)});});
@@ -194,10 +273,9 @@ export class CampaignsController {
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button)=>button.addEventListener("click",close));
     const form=this.content.querySelector("#campaign-add-links-form");
     form?.querySelector("[data-link-search]")?.addEventListener("input",(event)=>{
-      const query=event.target.value.trim().toLocaleLowerCase("pt-BR");
       const rows=[...form.querySelectorAll("[data-relation-option]")];
       let visible=0;
-      rows.forEach((row)=>{const matches=!query||row.textContent.toLocaleLowerCase("pt-BR").includes(query);row.hidden=!matches;if(matches)visible++;});
+      rows.forEach((row)=>{const matches=matchesSearch(row.textContent,event.target.value);row.hidden=!matches;if(matches)visible++;});
       const empty=form.querySelector("[data-link-empty]");
       if(empty)empty.hidden=visible!==0||rows.length===0;
     });

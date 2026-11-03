@@ -2,6 +2,7 @@ import { createCampaign, createNumberCampaignLink } from "../models/entities.js"
 import { now } from "../models/helpers.js";
 import { assertHardDeletable, applyLocalHardDelete } from "../models/hard-delete.js";
 import { hasBlockingRestriction } from "../models/number.js";
+import { matchesSearch } from "../models/search-match.js";
 
 export const CAMPAIGN_STATUSES = Object.freeze({ ACTIVE: "ACTIVE", CLOSED: "CLOSED" });
 export const CAMPAIGN_ROLES = Object.freeze({ PRIMARY: "PRIMARY", BACKUP: "BACKUP", SUPPORT: "SUPPORT" });
@@ -23,7 +24,10 @@ export function effectiveCampaignStage(campaign) {
 
 export class CampaignsService {
   constructor(numbersService) { this.numbers = numbersService; this.state = numbersService.state; this.state.campaigns ??= []; this.state.numberCampaignLinks ??= []; }
-  list(filters = {}) { return this.state.campaigns.filter((item) => (!filters.query || item.name.toLocaleLowerCase("pt-BR").includes(filters.query.toLocaleLowerCase("pt-BR"))) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)); }
+  // Encerradas sempre por último (Array.prototype.sort é estável desde sempre no Node/browsers
+  // atuais — a ordem relativa dentro de cada grupo, ativas entre si e encerradas entre si,
+  // continua exatamente a mesma de antes; só o grupo "Encerrada" inteiro desce pro final).
+  list(filters = {}) { return this.state.campaigns.filter((item) => matchesSearch(item.name, filters.query) && (!filters.status || item.status === filters.status) && (!filters.stage || item.stage === filters.stage) && (!filters.squadId || item.squadId === filters.squadId) && (!filters.clientId || item.clientId === filters.clientId)).sort((a, b) => (a.status === CAMPAIGN_STATUSES.CLOSED ? 1 : 0) - (b.status === CAMPAIGN_STATUSES.CLOSED ? 1 : 0)); }
   get(id) { return this.state.campaigns.find((item) => item.id === id) ?? null; }
   create(input) { this.validate(input); const item = createCampaign({ ...input, status: CAMPAIGN_STATUSES.ACTIVE }); this.state.campaigns.push(item); this.persist(); return item; }
   update(id, input) { const existing = this.get(id); if (!existing) throw new Error("Campanha não encontrada."); this.validate(input); const item = { ...existing, name: String(input.name).trim(), clientId: input.clientId || null, squadId: input.squadId || null, responsibleId: input.responsibleId || null, notes: String(input.notes ?? "").trim(), updatedAt: now() }; Object.assign(existing, item); this.persist(); return existing; }
@@ -108,9 +112,13 @@ export class CampaignsService {
 
   /**
    * Diagnóstico (não altera nada): números que têm um cliente associado (clientIds) mas
-   * NÃO possuem vínculo ativo com nenhuma campanha ativa daquele cliente. Sinal de que o
-   * vínculo real pode nunca ter sido criado (ex.: limitação do sistema antigo de só 1
-   * vínculo ativo por número) — precisa de revisão humana, não é corrigido automaticamente.
+   * NUNCA tiveram vínculo NENHUM (nem já encerrado) com uma campanha ativa daquele cliente.
+   * Sinal de que o vínculo real pode nunca ter sido criado (ex.: limitação do sistema antigo
+   * de só 1 vínculo ativo por número) — precisa de revisão humana, não é corrigido
+   * automaticamente. Um vínculo já ENCERRADO com aquela campanha específica conta como "já
+   * revisado" e tira o número da lista — encerrar um vínculo (ex.: número reaproveitado pra
+   * campanhas antigas de propósito) é uma decisão humana deliberada, não um esquecimento; nunca
+   * deveria voltar a pedir revisão da MESMA combinação número/campanha depois disso.
    * Só se aplica a clientes de squads "exclusivos" (reusesChips=false, chips dedicados por
    * cliente): nos squads que reutilizam chips (padrão), um número associado ao cliente sem
    * vínculo de campanha ativo no momento é normal, não é uma lacuna.
@@ -128,11 +136,11 @@ export class CampaignsService {
     }).map((client) => client.id));
     const gaps = [];
     this.numbers.state.numbers.filter((number) => !number.archivedAt).forEach((number) => {
-      const linkedCampaignIds = new Set(this.activeLinksFor(number.id).map((link) => link.campaignId));
+      const everLinkedCampaignIds = new Set(this.linksFor(number.id).map((link) => link.campaignId));
       (number.clientIds ?? []).forEach((clientId) => {
         if (!exclusiveClientIds.has(clientId)) return;
         (activeCampaignsByClient.get(clientId) ?? []).forEach((campaign) => {
-          if (!linkedCampaignIds.has(campaign.id)) gaps.push({ numberId: number.id, phone: number.phone, identification: number.identification, clientId, clientName: clientName(clientId), campaignId: campaign.id, campaignName: campaign.name });
+          if (!everLinkedCampaignIds.has(campaign.id)) gaps.push({ numberId: number.id, phone: number.phone, identification: number.identification, clientId, clientName: clientName(clientId), campaignId: campaign.id, campaignName: campaign.name });
         });
       });
     });

@@ -1,4 +1,4 @@
-import { renderArchivedNumbersView, renderNumberForm, renderNumbersView } from "../ui/numbers-view.js";
+import { renderArchivedNumbersView, renderNumberForm, renderNumberRows, renderNumbersView } from "../ui/numbers-view.js";
 import { renderCampaignAddForm, renderNumberDetailView, renderRestrictionForm } from "../ui/number-detail-view.js";
 import { renderChangeRoleForm } from "../ui/campaigns-view.js";
 import { showToast } from '../ui/toast.js';
@@ -6,7 +6,9 @@ import { guardedSubmit } from '../ui/form-submit-guard.js';
 import { confirmHardDelete } from '../ui/hard-delete-dialog.js';
 import { confirmDialog } from "../ui/confirm-dialog.js";
 import { formatPhone } from "../ui/number-presentation.js";
+import { matchesSearch } from "../models/search-match.js";
 import { renderPageTabs, bindPageTabs, NUMBERS_SECTION_TABS } from "../ui/page-tabs.js";
+import { takePendingListFilter } from "../models/pending-list-filter.js";
 
 export class NumbersController {
   constructor({ service, campaignsService, content }) {
@@ -34,6 +36,12 @@ export class NumbersController {
   render(mode = "main") {
     this.activeMode = mode;
     const state = this.lists[mode];
+    // Veio de um card do Dashboard já filtrado (ver models/pending-list-filter.js). take()
+    // consome e limpa: só aplica nesta primeira renderização depois do clique, nunca de novo
+    // num render() seguinte (digitar na busca, trocar outro filtro etc. chamam render() de novo
+    // sem nenhum pendente, então isso nunca sobrescreve o que a pessoa ajustou manualmente depois).
+    const pendingFilter = takePendingListFilter("numbers");
+    if (pendingFilter) { state.filters = { ...state.filters, ...pendingFilter }; state.filtersOpen = true; }
     const isClient = mode === "client";
     const items = isClient ? this.service.getClientNumbers(state.query, state.filters) : this.service.getNumbers(state.query, state.filters);
     const viewOptions = isClient
@@ -67,27 +75,59 @@ export class NumbersController {
     this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id, false, true)));
   }
 
+  /** Digitar não repinta a página inteira (isso destruiria e recriaria o <input>, derrubando o
+   * foco a cada letra) — só os cartões da lista são atualizados, ver renderResults(mode). */
   bindPageEvents(mode = "main") {
     const state = this.lists[mode];
     const searchId = mode === "client" ? "client-number-search" : "number-search";
     this.content.querySelector(`#${searchId}`)?.addEventListener("input", (event) => {
       state.query = event.target.value;
-      const cursorPosition = event.target.selectionStart;
-      this.render(mode);
-      const searchInput = this.content.querySelector(`#${searchId}`);
-      searchInput?.focus();
-      searchInput?.setSelectionRange(cursorPosition, cursorPosition);
+      this.renderResults(mode);
     });
-    this.content.querySelector('[data-action="add"]')?.addEventListener("click", () => this.openForm());
-    this.content.querySelectorAll('[data-action="view"]').forEach((button) => button.addEventListener("click", () => this.showDetail(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => this.openForm(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="review"]').forEach((button) => button.addEventListener("click", () => this.markUnderReview(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="end-review"]').forEach((button) => button.addEventListener("click", () => this.endReview(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="archive"]').forEach((button) => button.addEventListener("click", () => this.archive(button.dataset.id)));
-    this.content.querySelectorAll('[data-action="hard-delete"]').forEach((button) => button.addEventListener("click", () => this.hardDelete(button.dataset.id)));
+    // querySelectorAll (não querySelector): existem DOIS botões "Adicionar número"/"Limpar
+    // filtros" possíveis ao mesmo tempo — o do cabeçalho/toolbar e o do card de "Nenhum número
+    // encontrado" (lista vazia). Cobrindo os dois aqui, bindListActions não precisa repetir.
+    this.content.querySelectorAll('[data-action="add"]').forEach((button) => button.addEventListener("click", () => this.openForm()));
+    this.content.querySelectorAll('[data-action="clear-filters"]').forEach((button) => button.addEventListener('click', () => { state.query = ''; state.filters = {}; this.render(mode); }));
+    this.bindListActions(mode);
     this.content.querySelectorAll("[data-filter]").forEach((input) => input.addEventListener("change", () => { state.filters[input.dataset.filter] = input.value; this.render(mode); }));
     this.content.querySelectorAll('[data-action="toggle-filters"]').forEach((button) => button.addEventListener('click', () => { state.filtersOpen = !state.filtersOpen; this.render(mode); }));
-    this.content.querySelectorAll('[data-action="clear-filters"]').forEach((button) => button.addEventListener('click', () => { state.query = ''; state.filters = {}; this.render(mode); }));
+  }
+
+  /** Delegado no container da lista (um listener só, não um por cartão): continua funcionando
+   * depois que renderResults() troca o innerHTML da lista a cada letra digitada. "add" e
+   * "clear-filters" não entram aqui — já cobertos por bindPageEvents (ver comentário lá), senão
+   * disparariam duas vezes pro botão que fica dentro do card de lista vazia. */
+  bindListActions(mode) {
+    const list = this.content.querySelector(".numbers-list");
+    if (!list || list.dataset.actionsBound === "true") return;
+    list.dataset.actionsBound = "true";
+    list.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const { id, action } = button.dataset;
+      if (action === "view") this.showDetail(id);
+      else if (action === "edit") this.openForm(id);
+      else if (action === "review") this.markUnderReview(id);
+      else if (action === "end-review") this.endReview(id);
+      else if (action === "archive") this.archive(id);
+      else if (action === "hard-delete") this.hardDelete(id);
+    });
+  }
+
+  /** Só re-renderiza os cartões da lista + a contagem (mesma renderNumberRows usada no HTML
+   * completo, ver renderNumbersView) — busca, filtros e o resto da página não mudam. */
+  renderResults(mode) {
+    const list = this.content.querySelector(".numbers-list");
+    const countEl = this.content.querySelector(".numbers-result-bar strong");
+    if (!list) return this.render(mode);
+    const state = this.lists[mode];
+    const isClient = mode === "client";
+    const numbers = isClient ? this.service.getClientNumbers(state.query, state.filters) : this.service.getNumbers(state.query, state.filters);
+    const activeCount = Object.values(state.filters).filter(Boolean).length;
+    const emptyTitle = isClient ? "Nenhum número de cliente encontrado" : "Nenhum número encontrado";
+    list.innerHTML = renderNumberRows(numbers, this.service.getLocations(), this.service.getResponsibles(), this.service.getClients(), this.service.getGroups(), this.service.state.campaigns, this.service.state.numberCampaignLinks, state.query, activeCount, { emptyTitle });
+    if (countEl) countEl.textContent = `${numbers.length} ${numbers.length === 1 ? "número encontrado" : "números encontrados"}`;
   }
 
   showDetail(id) {
@@ -115,7 +155,7 @@ export class NumbersController {
 
   openForm(id = null, message = "") {
     const number = id ? this.service.getNumber(id) : null;
-    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message }));
+    this.content.insertAdjacentHTML("beforeend", renderNumberForm({ number, locations: this.service.getLocations(), responsibles: this.service.getResponsibles(), clients: this.service.getClients(), groups: this.service.getGroups(), message, lockedGroupId: this.service.scopeSquadId }));
     const form = this.content.querySelector("#number-form");
     form.querySelector('[name="phone"]')?.addEventListener("input", (event) => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 13); });
     this.content.querySelectorAll('[data-action="close-form"]').forEach((button) => button.addEventListener("click", () => this.closeForm()));
@@ -129,11 +169,10 @@ export class NumbersController {
     const group = input.dataset.relationSearch;
     const optionsContainer = form.querySelector(`[data-relation-options="${group}"]`);
     if (!optionsContainer) return;
-    const query = input.value.trim().toLocaleLowerCase("pt-BR");
     const options = [...optionsContainer.querySelectorAll(".check-option")];
     let visibleCount = 0;
     options.forEach((option) => {
-      const matches = !query || option.textContent.toLocaleLowerCase("pt-BR").includes(query);
+      const matches = matchesSearch(option.textContent, input.value);
       option.hidden = !matches;
       if (matches) visibleCount++;
     });
@@ -144,14 +183,18 @@ export class NumbersController {
   async submitForm(form) {
     const formData = new FormData(form);
     const values = { ...Object.fromEntries(formData), clientIds: formData.getAll("clientIds"), groupIds: formData.getAll("groupIds") };
+    const editing = Boolean(form.dataset.id);
+    let created = null;
     try {
-      const editing = Boolean(form.dataset.id);
-      editing ? this.service.update(form.dataset.id, values) : this.service.create(values);
+      if (editing) this.service.update(form.dataset.id, values); else created = this.service.create(values);
       await this.service.flush();
       this.closeForm();
       this.renderActive();
       showToast(editing ? 'Número atualizado com sucesso.' : 'Número cadastrado com sucesso.', 'success');
     } catch (error) {
+      // Telefone recusado pelo banco (ex.: já cadastrado em outro Squad, que este usuário não
+      // enxerga) — o número nunca foi gravado, então sai do estado local também.
+      if (created && error?.duplicatePhone) this.service.discardUnsyncedNumber(created.id);
       showToast(error.message, 'error');
       this.closeForm(); this.openForm(form.dataset.id || null, error.message);
     }
